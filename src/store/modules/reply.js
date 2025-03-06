@@ -1,100 +1,76 @@
-import axios from 'axios';
-
-const state = {
-  replies: [],
-  loading: false,
-  error: null
-};
-
-const mutations = {
-  SET_REPLIES(state, replies) {
-    state.replies = replies;
-  },
-  ADD_REPLY(state, reply) {
-    state.replies.push(reply);
-  },
-  SET_LOADING(state, loading) {
-    state.loading = loading;
-  },
-  SET_ERROR(state, error) {
-    state.error = error;
-  }
-};
-
-const actions = {
-  // Добавление нового ответа
-  async addReply({ commit }, { topicId, content, userId, username, userAvatar }) {
-    try {
-      commit('SET_LOADING', true);
-      const replyData = {
-        topicId,
-        content,
-        userId,
-        username,
-        userAvatar,
-        createdAt: new Date().toISOString()
-      };
-
-      const response = await axios.post('/api/replies', replyData);
-      commit('ADD_REPLY', response.data);
-      commit('SET_LOADING', false);
-      return response.data;
-    } catch (error) {
-      commit('SET_ERROR', error.message);
-      commit('SET_LOADING', false);
-      throw error;
-    }
-  },
-
-  // Загрузка ответов для темы
-  async fetchRepliesByTopicId({ commit, dispatch }, topicId) {
-    try {
-      commit('SET_LOADING', true);
-      const response = await axios.get(`/api/replies/${topicId}`);
-      
-      // Получаем профили пользователей для каждого ответа
-      const repliesWithProfiles = await Promise.all(
-        response.data.map(async (reply) => {
-          try {
-            // Получаем профиль пользователя
-            const profileResponse = await axios.get(`${process.env.VUE_APP_API_URL}/users/${reply.userId}/profile`);
-            
-            return {
-              ...reply,
-              username: profileResponse.data?.username || 'Гость',
-              userAvatar: profileResponse.data?.avatarUrl || '/image/empty_avatar.png',
-            };
-          } catch (error) {
-            console.error('Error fetching user profile:', error);
-            return {
-              ...reply,
-              username: 'Гость',
-              userAvatar: '/image/empty_avatar.png',
-            };
-          }
-        })
-      );
-
-      commit('SET_REPLIES', repliesWithProfiles);
-      commit('SET_LOADING', false);
-    } catch (error) {
-      commit('SET_ERROR', error.message);
-      commit('SET_LOADING', false);
-      throw error;
-    }
-  }
-};
-
-const getters = {
-  getReplies: state => state.replies,
-  isLoading: state => state.loading,
-  getError: state => state.error
-};
+import { ref as databaseRef, push, set, onValue } from 'firebase/database';
+import { database } from '../../plugins/firebase';
 
 export default {
   namespaced: true,
-  state,
-  mutations,
-  actions,
-  getters
+  state() {
+    return {
+      replies: {},
+    };
+  },
+  mutations: {
+    SET_REPLIES(state, { commentId, replies }) {
+      state.replies[commentId] = replies;
+    },
+    ADD_REPLY(state, { commentId, reply }) {
+      if (!state.replies[commentId]) {
+        state.replies[commentId] = [];
+      }
+      state.replies[commentId].push(reply);
+    },
+  },
+  actions: {
+    async fetchReplies({ commit }, { postId, commentId }) {
+      try {
+        const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
+        onValue(repliesRef, (snapshot) => {
+          const replies = [];
+          if (snapshot.exists()) {
+            snapshot.forEach((childSnapshot) => {
+              replies.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val(),
+              });
+            });
+          }
+          commit('SET_REPLIES', { commentId, replies });
+        });
+      } catch (error) {
+        console.error('Ошибка при загрузке ответов:', error);
+      }
+    },
+    async addReply({ commit, rootState }, { postId, commentId, content }) {
+      try {
+        const currentUser = rootState.auth.user;
+        if (!currentUser) {
+          throw new Error('Пользователь не авторизован');
+        }
+
+        const newReply = {
+          content,
+          author: {
+            uid: currentUser.uid,
+            username: currentUser.username || 'Гость',
+            avatarUrl: currentUser.avatarUrl || '/image/empty_avatar.png',
+          },
+          createdAt: new Date().toISOString(),
+        };
+
+        const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
+        const newReplyRef = push(repliesRef);
+        await set(newReplyRef, newReply);
+
+        commit('ADD_REPLY', { commentId, reply: { id: newReplyRef.key, ...newReply } });
+        return { success: true };
+      } catch (error) {
+        console.error('Ошибка при добавлении ответа:', error);
+        return { success: false, error: error.message };
+      }
+    },
+  },
+  getters: {
+    getReplies: (state) => (commentId) => {
+      return state.replies[commentId] || [];
+    },
+  },
 };

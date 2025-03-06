@@ -10,17 +10,12 @@
           <div class="p-6">
             <!-- Шапка комментария -->
             <div class="flex items-start space-x-4">
-              <!-- Аватар -->
-              <div class="flex-shrink-0">
-                <img 
-                  :src="comment.author?.avatarUrl || '/image/empty_avatar.png'"
-                  :alt="comment.author?.username || 'Гость'"
-                  class="w-12 h-12 rounded-full object-cover ring-4 ring-purple-500/30"
-                  @error="handleAvatarError"
-                >
-              </div>
-  
-              <!-- Информация об авторе и контент -->
+              <img
+                :src="comment.author?.avatarUrl || '/image/empty_avatar.png'"
+                :alt="comment.author?.username || 'Гость'"
+                class="w-12 h-12 rounded-full object-cover ring-4 ring-purple-500/30"
+                @error="handleAvatarError"
+              >
               <div class="flex-1">
                 <div class="flex items-center justify-between">
                   <div>
@@ -36,45 +31,54 @@
                   </span>
                 </div>
   
-                <!-- Текст комментария -->
                 <div class="mt-4 text-gray-600 dark:text-gray-300">
                   {{ comment.content }}
                 </div>
   
-                <!-- Действия с комментарием -->
                 <div class="mt-4 flex items-center space-x-4 text-sm">
-                  <button 
-                    @click="likeComment(comment.id)" 
+                  <button
+                    @click="likeComment(comment.id)"
                     class="flex items-center space-x-2"
                     :class="{
                       'text-red-500': isLikedByCurrentUser(comment),
-                      'text-gray-500 hover:text-red-500': !isLikedByCurrentUser(comment)
+                      'text-gray-500 hover:text-red-500': !isLikedByCurrentUser(comment),
                     }"
                   >
                     <i class="fas fa-heart"></i>
                     <span>{{ comment.likes || 0 }}</span>
                   </button>
-                  <button 
-                    @click="replyToComment(comment.id)"
+                  <button
+                    @click="toggleReplyForm(comment.id)"
                     class="flex items-center space-x-2 text-gray-500 hover:text-blue-500"
                   >
                     <i class="fas fa-reply"></i>
                     <span>Ответить</span>
                   </button>
                 </div>
+  
+                <!-- Форма ответа -->
+                <ReplyComment
+                  v-if="activeReplyCommentId === comment.id"
+                  :comment-id="comment.id"
+                  :post-id="postId"
+                  @cancel="toggleReplyForm(null)"
+                />
               </div>
             </div>
           </div>
   
           <!-- Ответы на комментарий -->
-          <div v-show="comment.replies?.length" class="border-t border-gray-100 dark:border-gray-700">
-            <div 
-              v-for="reply in comment.replies" 
+          <div
+            v-if="replies(comment.id).length"
+            class="border-t border-gray-100 dark:border-gray-700"
+          >
+            <div
+              v-for="reply in replies(comment.id)"
               :key="reply.id"
               class="p-4 pl-16 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
             >
               <div class="flex items-start space-x-3">
-                <img 
+                <img
                   :src="reply.author?.avatarUrl || '/image/empty_avatar.png'"
                   :alt="reply.author?.username || 'Гость'"
                   class="w-8 h-8 rounded-full object-cover"
@@ -96,7 +100,7 @@
       </div>
   
       <!-- Сообщение, если нет комментариев -->
-      <div 
+      <div
         v-show="!comments.length"
         class="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl shadow-sm"
       >
@@ -107,29 +111,34 @@
   </template>
   
   <script setup>
-  import { computed, onMounted } from 'vue';
+  import { computed, ref, onMounted } from 'vue';
   import { useStore } from 'vuex';
+  import ReplyComment from '../views/ReplyComment.vue';
   
   const props = defineProps({
     postId: {
       type: String,
-      required: true
-    }
+      required: true,
+    },
   });
   
   const store = useStore();
   const comments = computed(() => store.getters['comments/getComments'] || []);
   const currentUser = computed(() => store.state.auth.user);
+  const activeReplyCommentId = ref(null);
   
   onMounted(() => {
     store.dispatch('comments/fetchComments', props.postId);
+    comments.value.forEach((comment) => {
+      store.dispatch('reply/fetchReplies', { postId: props.postId, commentId: comment.id });
+    });
   });
   
   const likeComment = async (commentId) => {
     try {
       await store.dispatch('comments/likeComment', {
         postId: props.postId,
-        commentId
+        commentId,
       });
     } catch (error) {
       console.error('Error liking comment:', error);
@@ -142,9 +151,12 @@
     return likedBy.includes(currentUser.value.uid);
   };
   
-  const replyToComment = (commentId) => {
-    // TODO: Implement reply functionality
-    console.log('Reply to comment:', commentId);
+  const toggleReplyForm = (commentId) => {
+    activeReplyCommentId.value = activeReplyCommentId.value === commentId ? null : commentId;
+  };
+  
+  const replies = (commentId) => {
+    return store.getters['reply/getReplies'](commentId) || [];
   };
   
   const handleAvatarError = (event) => {
@@ -159,7 +171,7 @@
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     }).format(date);
   };
   </script>

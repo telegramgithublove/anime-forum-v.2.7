@@ -15,6 +15,8 @@ import tegsModule from './modules/tegs.js';
 import progressModule from './modules/progress.js';
 import commentsModule from './modules/comments.js';
 import paginationModule from './modules/pagination.js';
+import replyModule  from './modules/reply.js';
+
 
 const store = createStore({
   modules: {
@@ -32,7 +34,8 @@ const store = createStore({
     tegs: tegsModule,
     progress: progressModule,
     comments: commentsModule,
-    pagination: paginationModule
+    pagination: paginationModule,
+    reply: replyModule
   }
 });
 

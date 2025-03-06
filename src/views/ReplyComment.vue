@@ -1,138 +1,100 @@
 <template>
-  <div class="reply-to-comment">
-    <div class="bg-white rounded-lg shadow-sm p-6 mb-4 hover:shadow-md transition-shadow duration-200">
-      <!-- Верхняя часть с информацией о пользователе и лайками -->
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center space-x-4">
-          <router-link :to="`/profile/${reply.userId}`" class="flex-shrink-0">
-            <img
-              :src="reply.userAvatar || '/default-avatar.png'"
-              :alt="reply.username"
-              class="w-10 h-10 rounded-full object-cover border-2 border-purple-200 hover:border-purple-400 transition-colors duration-200"
-            />
-          </router-link>
-          <div>
-            <router-link 
-              :to="`/profile/${reply.userId}`"
-              class="font-medium text-gray-900 hover:text-purple-600 transition-colors duration-200"
+  <div class="mt-4 pl-16">
+    <form @submit.prevent="submitReply" class="space-y-4">
+      <div class="flex items-start space-x-3">
+        <!-- Аватар текущего пользователя -->
+        <img
+          :src="currentUser?.avatarUrl || '/image/empty_avatar.png'"
+          :alt="currentUser?.username || 'Гость'"
+          class="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/20"
+          @error="handleAvatarError"
+        />
+
+        <!-- Поле ввода -->
+        <div class="flex-1">
+          <textarea
+            v-model="replyContent"
+            placeholder="Напишите ваш ответ..."
+            class="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-200 border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition-all duration-200"
+            rows="2"
+            @input="adjustTextareaHeight"
+          ></textarea>
+
+          <!-- Кнопки -->
+          <div class="mt-2 flex justify-end space-x-2">
+            <button
+              type="button"
+              @click="$emit('cancel')"
+              class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-              {{ reply.username }}
-            </router-link>
-            <div class="text-sm text-gray-500">{{ formatDate(reply.createdAt) }}</div>
+              Отмена
+            </button>
+            <button
+              type="submit"
+              :disabled="!replyContent.trim()"
+              class="px-4 py-2 text-sm bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 transition-all duration-200"
+            >
+              Отправить
+            </button>
           </div>
         </div>
-        
-        <!-- Лайки справа -->
-        <button 
-          @click="handleLike"
-          class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-purple-50 text-gray-500 hover:text-purple-600 transition-all duration-200"
-          :class="{ 'text-purple-600 bg-purple-50': isLiked }"
-          :disabled="isLiked"
-        >
-          <i class="fas fa-heart"></i>
-          <span class="text-sm font-medium">{{ likeCount }}</span>
-        </button>
       </div>
-
-      <!-- Контент ответа -->
-      <div class="pl-14">
-        <p class="text-gray-700 whitespace-pre-wrap">{{ reply.content }}</p>
-        
-        <!-- Прикрепленные медиа файлы -->
-        <div v-if="reply.image || reply.video" class="mt-3">
-          <img 
-            v-if="reply.image" 
-            :src="reply.image" 
-            alt="Прикрепленное изображение"
-            class="max-w-sm rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
-            @click="openMediaPreview(reply.image)"
-          />
-          <video 
-            v-if="reply.video" 
-            :src="reply.video" 
-            class="max-w-sm rounded-lg shadow-sm mt-2"
-            controls
-          ></video>
-        </div>
-      </div>
-    </div>
+    </form>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
-import { useRouter } from 'vue-router';
+import { useToast } from 'vue-toastification';
 
+const toast = useToast();
 const props = defineProps({
-  reply: {
-    type: Object,
-    required: true
-  }
+  commentId: { type: [String, Number], required: true },
+  postId: { type: String, required: true },
 });
 
+const emit = defineEmits(['cancel']);
 const store = useStore();
-const router = useRouter();
+const replyContent = ref('');
+const currentUser = computed(() => store.state.auth.user);
 
-const likeCount = computed(() => {
-  return store.getters['media/getCommentLikes'](props.reply.id);
-});
-
-const isLiked = computed(() => {
-  const currentUser = store.state.auth.user;
-  if (!currentUser) return false;
-  return store.getters['media/hasUserLikedComment'](props.reply.id, currentUser.uid);
-});
-
-function formatDate(date) {
-  return new Date(date).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-async function handleLike() {
-  const currentUser = store.state.auth.user;
-  if (!currentUser) {
-    router.push('/login');
+const submitReply = async () => {
+  if (!currentUser.value) {
+    toast.error('Пожалуйста, войдите в систему');
+    return;
+  }
+  if (!replyContent.value.trim()) {
+    toast.warning('Введите текст ответа');
     return;
   }
 
   try {
-    await store.dispatch('media/incrementCommentLike', {
-      commentId: props.reply.id,
-      userId: currentUser.uid
+    const result = await store.dispatch('reply/addReply', {
+      postId: props.postId,
+      commentId: props.commentId,
+      content: replyContent.value,
     });
-  } catch (error) {
-    if (error.message === 'Вы уже поставили лайк этому комментарию') {
-      alert(error.message);
+    if (result.success) {
+      replyContent.value = '';
+      toast.success('Ответ успешно добавлен');
+      emit('cancel'); // Закрываем форму после успешной отправки
     } else {
-      console.error('Ошибка при обработке лайка:', error);
+      toast.error(result.error || 'Не удалось добавить ответ');
     }
+  } catch (error) {
+    console.error('Ошибка при отправке ответа:', error);
+    toast.error('Произошла ошибка');
   }
-}
+};
 
-function openMediaPreview(imageUrl) {
-  // Здесь можно добавить логику для открытия изображения в модальном окне
-  window.open(imageUrl, '_blank');
-}
+const handleAvatarError = (event) => {
+  event.target.src = '/image/empty_avatar.png';
+};
+
+const adjustTextareaHeight = (event) => {
+  const textarea = event.target;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+};
 </script>
-
-<style scoped>
-.reply-to-comment {
-  position: relative;
-}
-
-.reply-to-comment::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 0;
-  height: 100%;
-  width: 2px;
-  background-color: #e5e7eb;
-}
-</style>
