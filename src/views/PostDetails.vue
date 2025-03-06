@@ -127,7 +127,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
               <button @click="handleLike" 
-                      class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors duration-300"
+                      class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition Ecolors duration-300"
                       :class="{ 'text-red-500': isLikedByCurrentUser }">
                 <i class="fas fa-heart" :class="{ 'fas': isLikedByCurrentUser, 'far': !isLikedByCurrentUser }"></i>
                 <span>{{ likesCount }}</span>
@@ -367,7 +367,7 @@ const submitComment = async () => {
     nextTick(() => {
       if (commentEditor.value) commentEditor.value.innerText = '';
     });
-    store.dispatch('pagination/setTotalItems', allComments.value.length); // Обновляем totalItems
+    store.dispatch('pagination/setTotalItems', allComments.value.length); // Обновляем totalItems после добавления
     toast.success('Комментарий успешно добавлен!');
   } catch (error) {
     console.error('Error submitting comment:', error);
@@ -375,6 +375,7 @@ const submitComment = async () => {
   }
 };
 
+// Обработчик смены страницы для пагинации
 const handlePageChange = (page) => {
   store.dispatch('pagination/setCurrentPage', page);
 };

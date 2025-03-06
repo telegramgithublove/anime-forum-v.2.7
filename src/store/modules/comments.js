@@ -34,11 +34,11 @@ export default {
       const comment = state.comments.find(c => c.id === commentId);
       if (comment) {
         comment.likes = (comment.likes || 0) + increment;
-        if (!comment.likedBy) comment.likedBy = {}; // Инициализируем как объект
+        if (!comment.likedBy) comment.likedBy = {};
         if (increment > 0) {
-          comment.likedBy[userId] = true; // Добавляем ключ в объект
+          comment.likedBy[userId] = true;
         } else {
-          delete comment.likedBy[userId]; // Удаляем ключ из объекта
+          delete comment.likedBy[userId];
         }
       }
     },
@@ -148,6 +148,49 @@ export default {
         }
       } catch (error) {
         console.error('Ошибка при установке лайка:', error);
+        throw error;
+      }
+    },
+
+    // Добавленное действие addComment
+    async addComment({ commit, rootState }, { postId, content }) {
+      try {
+        const currentUser = rootState.auth.user;
+        if (!currentUser) {
+          throw new Error('Пожалуйста, войдите в систему');
+        }
+
+        const userProfileRef = databaseRef(database, `users/${currentUser.uid}/profile`);
+        const userProfileSnapshot = await get(userProfileRef);
+        const userProfile = userProfileSnapshot.val() || {};
+
+        const newComment = {
+          content,
+          author: {
+            uid: currentUser.uid,
+            username: userProfile.username || 'Guest',
+            avatarUrl: userProfile.avatarUrl || '/image/empty_avatar.png',
+            signature: userProfile.signature || 'New User',
+          },
+          createdAt: new Date().toISOString(),
+          likes: 0,
+          likedBy: {},
+        };
+
+        const commentsRef = databaseRef(database, `posts/${postId}/comments`);
+        const newCommentRef = push(commentsRef);
+        await set(newCommentRef, newComment);
+
+        // Добавляем комментарий в состояние
+        commit('SET_COMMENTS', [
+          ...state.comments,
+          { id: newCommentRef.key, ...newComment }
+        ]);
+
+        return { success: true };
+      } catch (error) {
+        console.error('Ошибка при добавлении комментария:', error);
+        commit('SET_ERROR', error.message);
         throw error;
       }
     },
