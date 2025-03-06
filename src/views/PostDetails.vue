@@ -64,11 +64,11 @@
 
         <!-- Содержимое поста -->
         <div class="p-6">
-          <!-- Текст поста -->
-          <div class="prose dark:prose-invert max-w-none" v-html="post.content"></div>
+          <!-- Текст поста с проверкой -->
+          <div class="prose dark:prose-invert max-w-none" v-html="post.content || ''"></div>
 
           <!-- Изображения -->
-          <div v-if="post.pictures" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+          <div v-if="post.pictures && Object.keys(post.pictures).length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
             <div v-for="(image, index) in Object.values(post.pictures)" :key="index" class="relative group">
               <img 
                 :src="getImageUrl(image)"
@@ -291,15 +291,11 @@
               <div class="text-xs text-gray-500 dark:text-gray-400 italic transition-opacity duration-300 hover:opacity-80">{{ currentUser.signature || 'Участник форума' }}</div>
               
               <div ref="commentEditor" contenteditable="true" 
-                   class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow duration-300 shadow-sm hover:shadow-lg min-h-[100px] w-[600px] overflow-hidden relative"
+                   class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow duration-300 shadow-sm hover:shadow-lg min-h-[100px] w-[600px] overflow-hidden relative break-words whitespace-pre-wrap"
                    @input="handleCommentInput"
-                   @keydown="handleKeyDown">
-                <div v-if="!commentContent" class="absolute top-4 left-4 flex items-center pointer-events-none">
-                  <span class="text-gray-400 text-xl">&#128172;</span>
-                  <span class="pl-2 text-gray-600 dark:text-gray-300">Напишите ваш комментарий...</span>
-                </div>
-                <div class="break-words whitespace-pre-wrap">{{ commentContent }}</div>
-              </div>
+                   @keydown="handleKeyDown"
+                   @focus="syncEditorContent">{{ commentContent }}</div>
+              
               
               <!-- Счетчик символов -->
               <div class="flex justify-end w-[600px]">
@@ -339,14 +335,12 @@
           </div>
         </div>
       </div>
-      
-      
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
@@ -369,15 +363,13 @@ const commentContent = ref('');
 const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
 
 const itemsPerPage = 10;
-const currentPage = computed(() => store.getters['pagination/getCurrentPage']);
+const currentPage = computed(() => store.getters['pagination/getCurrentPage'] || 1);
 
 const pagedComments = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
-  return comments.value.slice(start, end);
+  return comments.value.slice(start, end) || [];
 });
-
-// Existing refs and imports...
 
 // Получаем данные поста и автора
 onMounted(async () => {
@@ -385,17 +377,15 @@ onMounted(async () => {
   try {
     isLoading.value = true;
     
-    // Загружаем пост (теперь включает данные автора)
     const postData = await store.dispatch('posts/fetchPostById', postId);
-    post.value = postData;
+    post.value = postData || null;
     
-    // Загружаем комментарии
-    const commentsData = await store.dispatch('comments/fetchComments', postId);
-    comments.value = commentsData || [];
+    await store.dispatch('comments/fetchComments', postId);
     
     isLoading.value = false;
   } catch (error) {
-    console.error('Error loading post:', error);
+    console.error('Error loading post or comments:', error);
+    toast.error('Ошибка при загрузке данных');
     isLoading.value = false;
   }
 });
@@ -418,7 +408,7 @@ const authorData = computed(() => {
 
 // Получаем информацию о текущем пользователе из Vuex store
 const currentUser = computed(() => {
-  const profile = store.state.profile.profile;
+  const profile = store.state.profile?.profile || {};
   return {
     username: profile.username || '',
     avatarUrl: profile.avatarUrl || '/image/empty_avatar.png',
@@ -444,25 +434,43 @@ const formatTools = [
 // Методы для работы с редактором
 const applyFormat = (format) => {
   document.execCommand(format, false, null);
-  commentEditor.value.focus();
+  commentEditor.value?.focus();
+};
+
+const syncEditorContent = () => {
+  if (commentEditor.value && commentEditor.value.innerText !== commentContent.value) {
+    commentEditor.value.innerText = commentContent.value;
+  }
 };
 
 const handleCommentInput = (event) => {
-  const content = event.target.innerText;
-  if (content.length > MAX_CHARS) {
-    // Prevent further input if over limit
-    event.preventDefault();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    const textNode = event.target.firstChild;
-    range.setStart(textNode, MAX_CHARS);
-    range.setEnd(textNode, content.length);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.execCommand('delete', false);
-    return;
+  try {
+    const editor = commentEditor.value;
+    if (!editor) {
+      console.warn('Comment editor is not available');
+      return;
+    }
+
+    const content = event.target.innerText || '';
+    if (content.length > MAX_CHARS) {
+      event.preventDefault();
+      const truncatedContent = content.slice(0, MAX_CHARS);
+      commentContent.value = truncatedContent;
+      nextTick(() => {
+        editor.innerText = truncatedContent;
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+    } else {
+      commentContent.value = content;
+    }
+  } catch (error) {
+    console.error('Error in handleCommentInput:', error);
   }
-  commentContent.value = content;
 };
 
 const handleKeyDown = (event) => {
@@ -475,7 +483,6 @@ const handleKeyDown = (event) => {
 };
 
 const openEmojiPicker = () => {
-  // Реализация открытия окна с эмодзи
   console.log('Открытие окна с эмодзи');
 };
 
@@ -488,7 +495,6 @@ const triggerImageUpload = () => {
     const files = Array.from(e.target.files);
     for (const file of files) {
       try {
-        // Загружаем изображение в Firebase Storage
         const imageUrl = await store.dispatch('uploadImage', file);
         commentImages.value.push(imageUrl);
       } catch (error) {
@@ -508,7 +514,6 @@ const triggerVideoUpload = () => {
     const file = e.target.files[0];
     if (file) {
       try {
-        // Загружаем видео в Firebase Storage
         const videoUrl = await store.dispatch('uploadVideo', file);
         commentImages.value.push({ type: 'video', url: videoUrl });
       } catch (error) {
@@ -539,31 +544,26 @@ const submitComment = async () => {
       return;
     }
 
-    // Проверяем авторизацию
     const currentUser = store.state.auth.user;
     if (!currentUser || !currentUser.uid) {
       toast.error('Пожалуйста, войдите в систему, чтобы оставить комментарий');
       return;
     }
 
-    const commentData = {
-      postId: post.value.id,
-      content: commentContent.value.trim(),
-      attachments: commentImages.value,
-      createdAt: new Date().toISOString(),
-      userId: currentUser.uid
-    };
-
     await store.dispatch('comments/addComment', {
       postId: route.params.id,
       content: commentContent.value.trim()
     });
-    
-    // Очищаем форму
+
+    // Очищаем только реактивное состояние
     commentContent.value = '';
     commentImages.value = [];
+
+    // Синхронизируем DOM после следующего рендера
+    await nextTick();
     if (commentEditor.value) {
-      commentEditor.value.innerHTML = '';
+      commentEditor.value.innerText = '';
+      commentEditor.value.focus();
     }
 
     toast.success('Комментарий успешно добавлен!');
@@ -597,8 +597,7 @@ const handleLike = async () => {
   }
   
   try {
-    // Оптимистично обновляем UI
-    const currentLikes = { ...(post.value.likes || {}) };
+    const currentLikes = { ...(post.value?.likes || {}) };
     if (currentLikes[user.uid]) {
       delete currentLikes[user.uid];
     } else {
@@ -606,14 +605,11 @@ const handleLike = async () => {
     }
     post.value = { ...post.value, likes: currentLikes };
 
-    // Отправляем запрос на сервер
     const updatedPost = await store.dispatch('posts/toggleLike', post.value.id);
-    // Обновляем пост данными с сервера
     post.value = updatedPost;
   } catch (error) {
     toast.error('Не удалось поставить лайк');
     console.error('Error toggling like:', error);
-    // В случае ошибки получаем актуальные данные
     const currentPost = await store.dispatch('posts/fetchPostById', post.value.id);
     post.value = currentPost;
   }
@@ -629,8 +625,8 @@ const focusComment = () => {
 const sharePost = async () => {
   try {
     await navigator.share({
-      title: post.value.title,
-      text: post.value.content,
+      title: post.value?.title,
+      text: post.value?.content,
       url: window.location.href
     });
   } catch (error) {
@@ -651,57 +647,45 @@ const likeComment = async (commentId) => {
 };
 
 const replyToComment = (commentId) => {
-  // Реализация ответа на комментарий
   console.log('Ответ на комментарий:', commentId);
 };
 
 const canEditComment = (comment) => {
-  // Реализация проверки возможности редактирования комментария
   console.log('Проверка возможности редактирования комментария:', comment);
   return true;
 };
 
 const editComment = (commentId) => {
-  // Реализация редактирования комментария
   console.log('Редактирование комментария:', commentId);
 };
 
 const openMediaPreview = (url) => {
-  // Реализация открытия медиа-превью
   console.log('Открытие медиа-превью:', url);
 };
 
 const downloadDocument = async (url, fileName) => {
   try {
-    // Показываем индикатор загрузки
     const downloadingToast = toast.info('Загрузка документа...', {
       timeout: false,
       closeOnClick: false,
       draggable: false
     });
     
-    // Получаем файл
     const response = await fetch(url);
     if (!response.ok) throw new Error('Ошибка при загрузке файла');
     
-    // Создаем blob из ответа
     const blob = await response.blob();
-    
-    // Создаем ссылку для скачивания
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = fileName || 'document';
     
-    // Добавляем ссылку в DOM и эмулируем клик
     document.body.appendChild(link);
     link.click();
     
-    // Удаляем ссылку и освобождаем URL
     document.body.removeChild(link);
     window.URL.revokeObjectURL(downloadUrl);
     
-    // Закрываем toast загрузки и показываем успех
     toast.dismiss(downloadingToast);
     toast.success('Документ успешно скачан');
   } catch (error) {
@@ -745,6 +729,13 @@ const getCharacterCountText = (chars) => {
   if (chars <= 50) return 'Символов осталось мало';
   return 'Символов осталось много';
 };
+
+// Очистка перед размонтированием компонента
+onBeforeUnmount(() => {
+  if (commentEditor.value) {
+    commentEditor.value.innerText = '';
+  }
+});
 </script>
 
 <style scoped>

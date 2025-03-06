@@ -466,50 +466,58 @@ export default {
     },
 
     async toggleCommentLike({ commit, rootState }, { postId, commentId }) {
+      const currentUser = rootState.auth.user;
+      if (!currentUser) {
+        throw new Error('Требуется авторизация');
+      }
+
       try {
-        const user = rootState.auth.user
-        if (!user) throw new Error('Необходима авторизация')
-
-        const database = getDatabase()
-        const likeRef = dbRef(database, `comments/${postId}/${commentId}/likes/${user.uid}`)
-        const likesCountRef = dbRef(database, `comments/${postId}/${commentId}/likesCount`)
-
-        const likeSnapshot = await get(likeRef)
-        const isLiked = likeSnapshot.exists()
-
-        if (isLiked) {
-          await remove(likeRef)
-          const snapshot = await get(likesCountRef)
-          const currentLikes = snapshot.val() || 0
-          await set(likesCountRef, Math.max(0, currentLikes - 1))
+        const db = getDatabase();
+        
+        // Находим категорию с постом
+        const categoriesRef = dbRef(db, 'categories');
+        const categoriesSnapshot = await get(categoriesRef);
+        
+        if (categoriesSnapshot.exists()) {
+          const categories = categoriesSnapshot.val();
           
-          commit('UPDATE_COMMENT', { 
-            postId, 
-            commentId, 
-            updates: { 
-              isLiked: false,
-              likesCount: Math.max(0, currentLikes - 1)
-            } 
-          })
-        } else {
-          await set(likeRef, true)
-          const snapshot = await get(likesCountRef)
-          const currentLikes = snapshot.val() || 0
-          await set(likesCountRef, currentLikes + 1)
-          
-          commit('UPDATE_COMMENT', { 
-            postId, 
-            commentId, 
-            updates: { 
-              isLiked: true,
-              likesCount: currentLikes + 1
-            } 
-          })
+          // Ищем пост с комментарием
+          for (const categoryId in categories) {
+            if (categories[categoryId].posts && categories[categoryId].posts[postId]) {
+              const commentRef = dbRef(db, `categories/${categoryId}/posts/${postId}/comments/${commentId}`);
+              const commentSnapshot = await get(commentRef);
+              
+              if (commentSnapshot.exists()) {
+                const comment = commentSnapshot.val();
+                const likes = comment.likes || {};
+                
+                if (likes[currentUser.uid]) {
+                  delete likes[currentUser.uid];
+                } else {
+                  likes[currentUser.uid] = true;
+                }
+                
+                // Обновляем лайки в базе данных
+                await update(commentRef, { likes });
+                
+                const updatedComment = {
+                  ...comment,
+                  id: commentId,
+                  likes
+                };
+                
+                // Обновляем состояние в store
+                commit('UPDATE_COMMENT', { postId, commentId, comment: updatedComment });
+                return updatedComment;
+              }
+            }
+          }
         }
+        
+        throw new Error('Комментарий не найден');
       } catch (error) {
-        console.error('Ошибка при обновлении лайка:', error)
-        commit('SET_ERROR', error.message)
-        throw error
+        console.error('Ошибка при обновлении лайка комментария:', error);
+        throw error;
       }
     },
 

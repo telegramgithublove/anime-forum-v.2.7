@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { ref as databaseRef, push, set, get, onValue, child } from 'firebase/database';
+import { ref as databaseRef, push, set, get, onValue, update } from 'firebase/database';
 import { database } from '../../plugins/firebase';
 
 export default {
@@ -31,7 +30,6 @@ export default {
       try {
         const commentsRef = databaseRef(database, `posts/${postId}/comments`);
         
-        // Устанавливаем слушатель для реального времени
         onValue(commentsRef, (snapshot) => {
           const comments = [];
           if (snapshot.exists()) {
@@ -44,7 +42,6 @@ export default {
           }
           commit('SET_COMMENTS', comments);
         });
-
       } catch (error) {
         console.error('Ошибка при загрузке комментариев:', error);
         commit('SET_ERROR', error.message);
@@ -57,10 +54,9 @@ export default {
       try {
         const currentUser = rootState.auth.user;
         if (!currentUser) {
-          throw new Error('Пользалуйста, войдите в систему');
+          throw new Error('Пожалуйста, войдите в систему');
         }
 
-        // Получаем данные профиля пользователя
         const userProfileRef = databaseRef(database, `users/${currentUser.uid}/profile`);
         const userProfileSnapshot = await get(userProfileRef);
         const userProfile = userProfileSnapshot.val() || {};
@@ -75,19 +71,64 @@ export default {
           },
           createdAt: new Date().toISOString(),
           likes: 0,
+          likedBy: [], // Инициализируем массив для отслеживания лайков
           replies: []
         };
 
-        // Создаем новый комментарий в Firebase
         const commentsRef = databaseRef(database, `posts/${postId}/comments`);
         const newCommentRef = push(commentsRef);
         await set(newCommentRef, newComment);
 
-        // Комментарий автоматически добавится через слушатель onValue
-
         return { success: true };
       } catch (error) {
         console.error('Ошибка при добавлении комментария:', error);
+        commit('SET_ERROR', error.message);
+        return { success: false, error: error.message };
+      }
+    },
+
+    async likeComment({ commit, rootState }, { postId, commentId }) {
+      try {
+        const currentUser = rootState.auth.user;
+        if (!currentUser) {
+          throw new Error('Пожалуйста, войдите в систему, чтобы ставить лайки');
+        }
+
+        const commentRef = databaseRef(database, `posts/${postId}/comments/${commentId}`);
+        const snapshot = await get(commentRef);
+        if (!snapshot.exists()) {
+          throw new Error('Комментарий не найден');
+        }
+
+        const commentData = snapshot.val();
+        const currentLikes = commentData.likes || 0;
+        const likedBy = commentData.likedBy || [];
+        const userId = currentUser.uid;
+
+        // Проверяем, лайкал ли пользователь уже этот комментарий
+        const hasLiked = likedBy.includes(userId);
+        let updates = {};
+
+        if (hasLiked) {
+          // Убираем лайк
+          updates = {
+            likes: currentLikes - 1,
+            likedBy: likedBy.filter(id => id !== userId)
+          };
+        } else {
+          // Добавляем лайк
+          updates = {
+            likes: currentLikes + 1,
+            likedBy: [...likedBy, userId]
+          };
+        }
+
+        // Обновляем данные в Firebase
+        await update(commentRef, updates);
+
+        return { success: true };
+      } catch (error) {
+        console.error('Ошибка при обновлении лайка:', error);
         commit('SET_ERROR', error.message);
         return { success: false, error: error.message };
       }
