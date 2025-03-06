@@ -132,10 +132,11 @@
         <div class="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
-              <button @click="toggleLike" 
-                      class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors duration-300">
-                <i class="fas fa-heart"></i>
-                <span>{{ post.likes || 0 }}</span>
+              <button @click="handleLike" 
+                      class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors duration-300"
+                      :class="{ 'text-red-500': isLikedByCurrentUser }">
+                <i class="fas fa-heart" :class="{ 'fas': isLikedByCurrentUser, 'far': !isLikedByCurrentUser }"></i>
+                <span>{{ post.likes ? Object.keys(post.likes).length : 0 }}</span>
               </button>
               <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors duration-300"
                       @click="focusComment">
@@ -575,6 +576,25 @@ const submitComment = async () => {
 // Методы
 const goBack = () => {
   router.back();
+};
+
+const isLikedByCurrentUser = computed(() => {
+  if (!post.value?.likes || !store.state.auth.user) return false;
+  return post.value.likes[store.state.auth.user.uid];
+});
+
+const handleLike = async () => {
+  if (!store.state.auth.user) {
+    toast.warning('Пожалуйста, войдите в систему, чтобы поставить лайк');
+    return;
+  }
+  
+  try {
+    await store.dispatch('posts/toggleLike', post.value.id);
+  } catch (error) {
+    toast.error('Не удалось поставить лайк');
+    console.error('Error toggling like:', error);
+  }
 };
 
 const toggleLike = async () => {
