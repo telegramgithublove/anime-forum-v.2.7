@@ -319,13 +319,27 @@
               <div class="text-xs text-gray-500 dark:text-gray-400 italic transition-opacity duration-300 hover:opacity-80">{{ currentUser.signature || 'Участник форума' }}</div>
               
               <div ref="commentEditor" contenteditable="true" 
-                   class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow duration-300 shadow-sm hover:shadow-lg min-h-[100px] w-[600px] overflow-hidden relative"
-                   @input="handleCommentInput">
+                   class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow duration-300 shadow-sm hover:shadow-lg min-h-[100px] w-[600px] overflow-hidden relative"
+                   @input="handleCommentInput"
+                   @keydown="handleKeyDown">
                 <div v-if="!commentContent" class="absolute top-4 left-4 flex items-center pointer-events-none">
                   <span class="text-gray-400 text-xl">&#128172;</span>
                   <span class="pl-2 text-gray-600 dark:text-gray-300">Напишите ваш комментарий...</span>
                 </div>
                 <div class="break-words whitespace-pre-wrap">{{ commentContent }}</div>
+              </div>
+              
+              <!-- Счетчик символов -->
+              <div class="flex justify-end w-[600px]">
+                <div class="inline-flex items-center space-x-1.5 text-sm px-4 py-1.5 rounded-b-xl border-x border-b"
+                     :class="{
+                       'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800': remainingChars <= 0,
+                       'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800': remainingChars <= 50 && remainingChars > 0,
+                       'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700': remainingChars > 50
+                     }">
+                  <span class="font-mono font-medium">{{ remainingChars }}</span>
+                  <span class="font-medium tracking-tight">символов осталось</span>
+                </div>
               </div>
               
               <div class="flex items-center justify-between p-8 space-x-2">
@@ -375,6 +389,12 @@ const comments = ref([]);
 const newComment = ref('');
 const showActions = ref(false);
 const isLoading = ref(true);
+
+const MAX_CHARS = 333;
+const commentContent = ref('');
+const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
+
+// Existing refs and imports...
 
 // Получаем данные поста и автора
 onMounted(async () => {
@@ -428,7 +448,6 @@ const isUserOnline = computed(() => store.state.auth.status === 'authenticated')
 
 // Переменные для формы комментария
 const commentEditor = ref(null);
-const commentContent = ref('');
 const commentImages = ref([]);
 
 // Инструменты форматирования
@@ -447,13 +466,29 @@ const applyFormat = (format) => {
 
 const handleCommentInput = (event) => {
   const content = event.target.innerText;
-  if (content.length > 333) {
+  if (content.length > MAX_CHARS) {
+    // Prevent further input if over limit
     event.preventDefault();
-    commentContent.value = content.slice(0, 333);
-    event.target.innerText = content.slice(0, 333);
+    const selection = window.getSelection();
+    const range = document.createRange();
+    const textNode = event.target.firstChild;
+    range.setStart(textNode, MAX_CHARS);
+    range.setEnd(textNode, content.length);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand('delete', false);
     return;
   }
   commentContent.value = content;
+};
+
+const handleKeyDown = (event) => {
+  if (remainingChars.value <= 0 && !event.ctrlKey && !event.metaKey && 
+      event.key !== 'Backspace' && event.key !== 'Delete' && 
+      event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && 
+      event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+    event.preventDefault();
+  }
 };
 
 const openEmojiPicker = () => {
@@ -671,6 +706,12 @@ const formatFileSize = (size) => {
 const getImageUrl = (image) => {
   if (!image) return '';
   return image;
+};
+
+const getCharacterCountText = (chars) => {
+  if (chars <= 0) return 'Символов не осталось';
+  if (chars <= 50) return 'Символов осталось мало';
+  return 'Символов осталось много';
 };
 </script>
 
