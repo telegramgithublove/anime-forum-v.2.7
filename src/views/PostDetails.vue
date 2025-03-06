@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 p-4 sm:p-6 md:p-8">
-    <!-- Кнопка назад -->
     <div class="max-w-4xl mx-auto">
+      <!-- Кнопка назад -->
       <button @click="goBack" 
               class="group mb-6 flex items-center space-x-2 text-gray-600 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors duration-300">
         <i class="fas fa-arrow-left transform group-hover:-translate-x-1 transition-transform duration-300"></i>
@@ -144,53 +144,59 @@
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- Секция комментариев -->
-      <div class="mt-8">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
-          <i class="fas fa-comments mr-3 text-purple-500"></i>
-          Комментарии
-          <span class="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">
-            ({{ comments.length }})
-          </span>
-        </h2>
-        <Comments :post-id="postId" />
-      </div>
+        <!-- Секция комментариев с пагинацией -->
+        <div class="mt-8">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <i class="fas fa-comments mr-3 text-purple-500"></i>
+            Комментарии
+            <span class="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">
+              ({{ totalComments }})
+            </span>
+          </h2>
+          <Comments :post-id="postId" :current-page="currentPage" :items-per-page="itemsPerPage" />
+          <Pagination 
+            :total-items="totalComments" 
+            :items-per-page="itemsPerPage" 
+            :current-page="currentPage"
+            @page-changed="handlePageChange"
+          />
+        </div>
 
-      <!-- Форма комментария -->
-      <div class="mt-6">
-        <h2 class="text-2xl font-bold mb-4">Оставить комментарий</h2>
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-          <div class="flex items-center space-x-4">
-            <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" 
-                 :alt="currentUser.username || 'Гость'" 
-                 @error="handleAvatarError"
-                 class="w-14 h-14 rounded-full object-cover border-2 border-purple-500">
-            <div class="flex-1">
-              <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
-              <div ref="commentEditor" contenteditable="true" 
-                   class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] w-[600px]"
-                   @input="handleCommentInput"
-                   @keydown="handleKeyDown"
-                   @focus="syncEditorContent">{{ commentContent }}</div>
-              <div class="flex justify-end w-[600px]">
-                <div class="inline-flex items-center space-x-1.5 text-sm px-4 py-1.5 rounded-b-xl border-x border-b"
-                     :class="{
-                       'bg-red-50 text-red-600 border-red-200': remainingChars <= 0,
-                       'bg-yellow-50 text-yellow-600 border-yellow-200': remainingChars <= 50 && remainingChars > 0,
-                       'bg-gray-50 text-gray-600 border-gray-200': remainingChars > 50
-                     }">
-                  <span class="font-mono font-medium">{{ remainingChars }}</span>
-                  <span class="font-medium tracking-tight">символов осталось</span>
+        <!-- Форма комментария -->
+        <div class="mt-6">
+          <h2 class="text-2xl font-bold mb-4">Оставить комментарий</h2>
+          <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div class="flex items-center space-x-4">
+              <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" 
+                   :alt="currentUser.username || 'Гость'" 
+                   @error="handleAvatarError"
+                   class="w-14 h-14 rounded-full object-cover border-2 border-purple-500">
+              <div class="flex-1">
+                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
+                <div ref="commentEditor" contenteditable="true" 
+                     class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] w-[600px]"
+                     @input="handleCommentInput"
+                     @keydown="handleKeyDown"
+                     @focus="syncEditorContent">{{ commentContent }}</div>
+                <div class="flex justify-end w-[600px]">
+                  <div class="inline-flex items-center space-x-1.5 text-sm px-4 py-1.5 rounded-b-xl border-x border-b"
+                       :class="{
+                         'bg-red-50 text-red-600 border-red-200': remainingChars <= 0,
+                         'bg-yellow-50 text-yellow-600 border-yellow-200': remainingChars <= 50 && remainingChars > 0,
+                         'bg-gray-50 text-gray-600 border-gray-200': remainingChars > 50
+                       }">
+                    <span class="font-mono font-medium">{{ remainingChars }}</span>
+                    <span class="font-medium tracking-tight">символов осталось</span>
+                  </div>
                 </div>
-              </div>
-              <div class="flex items-center justify-end p-4 space-x-2">
-                <button @click="submitComment" 
-                        class="px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-all duration-300 flex items-center space-x-2">
-                  <i class="fas fa-paper-plane"></i>
-                  <span>Отправить</span>
-                </button>
+                <div class="flex items-center justify-end p-4 space-x-2">
+                  <button @click="submitComment" 
+                          class="px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-all duration-300 flex items-center space-x-2">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Отправить</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -206,6 +212,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
 import Comments from '../components/Comments.vue';
+import Pagination from '../components/Pagination.vue';
 
 const store = useStore();
 const route = useRoute();
@@ -216,6 +223,12 @@ const post = ref(null);
 const comments = computed(() => store.getters['comments/getComments'] || []);
 const isLoading = ref(true);
 const postId = computed(() => route.params.id);
+
+// Пагинация
+const currentPage = computed(() => store.getters['pagination/getCurrentPage']);
+const itemsPerPage = ref(10);
+const allComments = computed(() => store.getters['comments/getComments'] || []);
+const totalComments = computed(() => allComments.value.length);
 
 const MAX_CHARS = 333;
 const commentContent = ref('');
@@ -228,6 +241,7 @@ onMounted(async () => {
     const postData = await store.dispatch('posts/fetchPostById', postId.value);
     post.value = postData || null;
     await store.dispatch('comments/fetchComments', postId.value);
+    store.dispatch('pagination/setTotalItems', allComments.value.length); // Инициализация totalItems
     isLoading.value = false;
   } catch (error) {
     console.error('Error loading post or comments:', error);
@@ -353,11 +367,16 @@ const submitComment = async () => {
     nextTick(() => {
       if (commentEditor.value) commentEditor.value.innerText = '';
     });
+    store.dispatch('pagination/setTotalItems', allComments.value.length); // Обновляем totalItems
     toast.success('Комментарий успешно добавлен!');
   } catch (error) {
     console.error('Error submitting comment:', error);
     toast.error('Не удалось отправить комментарий');
   }
+};
+
+const handlePageChange = (page) => {
+  store.dispatch('pagination/setCurrentPage', page);
 };
 
 const handleAvatarError = (event) => {

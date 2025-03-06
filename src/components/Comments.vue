@@ -125,10 +125,23 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  currentPage: {
+    type: Number,
+    default: 1,
+  },
+  itemsPerPage: {
+    type: Number,
+    default: 10,
+  },
 });
 
 const store = useStore();
-const comments = computed(() => store.getters['comments/getComments'] || []);
+const allComments = computed(() => store.getters['comments/getComments'] || []);
+const comments = computed(() => {
+  const start = (props.currentPage - 1) * props.itemsPerPage;
+  const end = start + props.itemsPerPage;
+  return allComments.value.slice(start, end); // Фильтрация для пагинации
+});
 const currentUser = computed(() => store.state.auth.user);
 const activeReplyCommentId = ref(null);
 const isLiking = ref({});
@@ -164,8 +177,8 @@ const toggleLike = async (commentId) => {
 
 const isLikedByCurrentUser = (comment) => {
   if (!currentUser.value || !currentUser.value.uid) return false;
-  const likedBy = comment.likedBy || {}; // Ожидаем объект
-  return !!likedBy[currentUser.value.uid]; // Проверяем наличие ключа
+  const likedBy = comment.likedBy || {};
+  return !!likedBy[currentUser.value.uid];
 };
 
 const toggleReplyForm = (commentId) => {

@@ -56,7 +56,11 @@ const props = defineProps({
 const store = useStore();
 
 const currentPage = computed(() => store.getters['pagination/getCurrentPage']);
-const totalPages = computed(() => Math.ceil(props.totalItems / props.itemsPerPage));
+const totalPages = computed(() => {
+  const total = Math.ceil(props.totalItems / props.itemsPerPage);
+  console.log('Total Pages:', total);
+  return total;
+});
 
 const displayedPages = computed(() => {
   const pages = [];
