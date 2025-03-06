@@ -177,7 +177,7 @@
                 <div class="flex-shrink-0 group relative">
                   <img 
                     :src="comment.author?.avatarUrl || '/image/empty_avatar.png'"
-                    :alt="comment.author?.username || 'Неизвестный пользователь'"
+                    :alt="comment.author?.username || currentUser.username || 'Гость'"
                     class="w-12 h-12 rounded-full object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
                   >
                   <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"
@@ -189,10 +189,10 @@
                   <div class="flex items-center justify-between">
                     <div>
                       <h3 class="text-lg font-medium text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400 transition-colors duration-300">
-                        {{ comment.author.username }}
+                        {{ comment.author.username || currentUser.username || 'Гость' }}
                       </h3>
                       <p class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ comment.author.signature || 'Участник форума' }}
+                        {{ comment.author.signature || currentUser.signature || 'Участник форума' }}
                       </p>
                     </div>
                     <span class="text-sm text-gray-500 dark:text-gray-400 flex items-center">
@@ -272,13 +272,13 @@
                   <div class="flex items-start space-x-3">
                     <img 
                       :src="reply.author?.avatarUrl || '/image/empty_avatar.png'"
-                      :alt="reply.author?.username || 'Неизвестный пользователь'"
+                      :alt="reply.author?.username || currentUser.username || 'Гость'"
                       class="w-8 h-8 rounded-full object-cover"
                     >
                     <div class="flex-1">
                       <div class="flex items-center space-x-2">
                         <h4 class="font-medium text-gray-900 dark:text-white">
-                          {{ reply.author.username }}
+                          {{ reply.author.username || currentUser.username || 'Гость' }}
                         </h4>
                         <span class="text-sm text-gray-500">{{ formatDate(reply.createdAt) }}</span>
                       </div>
@@ -308,7 +308,7 @@
           <div class="flex items-center space-x-4">
             <div class="relative group">
               <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" 
-                   :alt="currentUser.username" 
+                   :alt="currentUser.username || 'Гость'" 
                    @error="handleAvatarError"
                    class="w-14 h-14 rounded-full object-cover border-2 border-purple-500 shadow-md transition-transform duration-300 group-hover:scale-110">
               <div v-if="isUserOnline" class="absolute bottom-0 right-0 bg-green-500 w-4 h-4 rounded-full border-2 border-white"></div>
@@ -421,15 +421,15 @@ onMounted(async () => {
 const authorData = computed(() => {
   if (post.value?.author) {
     return {
-      name: post.value.author.username || 'Неизвестный пользователь',
-      avatar: post.value.author.avatarUrl || '/image/empty_avatar.png',
-      signature: post.value.author.signature || 'Участник форума'
+      name: post.value.author.username || currentUser.value.username || 'Гость',
+      avatar: post.value.author.avatarUrl || currentUser.value.avatarUrl || '/image/empty_avatar.png',
+      signature: post.value.author.signature || currentUser.value.signature || 'Участник форума'
     };
   }
   return {
-    name: 'Неизвестный пользователь',
-    avatar: '/image/empty_avatar.png',
-    signature: 'Участник форума'
+    name: currentUser.value.username || 'Гость',
+    avatar: currentUser.value.avatarUrl || '/image/empty_avatar.png',
+    signature: currentUser.value.signature || 'Участник форума'
   };
 });
 
