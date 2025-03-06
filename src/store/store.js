@@ -14,6 +14,7 @@ import postsModule from './modules/posts.js';
 import tegsModule from './modules/tegs.js';
 import progressModule from './modules/progress.js';
 import commentsModule from './modules/comments.js';
+import paginationModule from './modules/pagination.js';
 
 const store = createStore({
   modules: {
@@ -30,7 +31,8 @@ const store = createStore({
     posts: postsModule,
     tegs: tegsModule,
     progress: progressModule,
-    comments: commentsModule
+    comments: commentsModule,
+    pagination: paginationModule
   }
 });
 

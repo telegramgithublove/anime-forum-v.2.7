@@ -164,7 +164,7 @@
         <!-- Список комментариев -->
         <div class="space-y-6">
           <div
-            v-for="comment in comments"
+            v-for="comment in pagedComments"
             :key="comment.id"
             class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg"
           >
@@ -263,6 +263,13 @@
             </p>
           </div>
         </div>
+
+        <!-- Pagination -->
+        <Pagination 
+          v-if="comments.length > itemsPerPage"
+          :total-items="comments.length"
+          :items-per-page="itemsPerPage"
+        />
       </div>
 
       <!-- Форма ответа -->
@@ -342,6 +349,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
+import Pagination from '../components/Pagination.vue';
 
 const store = useStore();
 const route = useRoute();
@@ -358,6 +366,15 @@ const isLoading = ref(true);
 const MAX_CHARS = 333;
 const commentContent = ref('');
 const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
+
+const itemsPerPage = 10;
+const currentPage = computed(() => store.getters['pagination/getCurrentPage']);
+
+const pagedComments = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return comments.value.slice(start, end);
+});
 
 // Existing refs and imports...
 
