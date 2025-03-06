@@ -136,7 +136,7 @@
                       class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors duration-300"
                       :class="{ 'text-red-500': isLikedByCurrentUser }">
                 <i class="fas fa-heart" :class="{ 'fas': isLikedByCurrentUser, 'far': !isLikedByCurrentUser }"></i>
-                <span>{{ post.likes ? Object.keys(post.likes).length : 0 }}</span>
+                <span>{{ likesCount }}</span>
               </button>
               <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors duration-300"
                       @click="focusComment">
@@ -578,30 +578,44 @@ const goBack = () => {
   router.back();
 };
 
+const likesCount = computed(() => {
+  if (!post.value?.likes) return 0;
+  return Object.keys(post.value.likes).length;
+});
+
 const isLikedByCurrentUser = computed(() => {
-  if (!post.value?.likes || !store.state.auth.user) return false;
-  return post.value.likes[store.state.auth.user.uid];
+  const user = store.state.auth.user;
+  if (!post.value?.likes || !user) return false;
+  return Boolean(post.value.likes[user.uid]);
 });
 
 const handleLike = async () => {
-  if (!store.state.auth.user) {
+  const user = store.state.auth.user;
+  if (!user) {
     toast.warning('Пожалуйста, войдите в систему, чтобы поставить лайк');
     return;
   }
   
   try {
-    await store.dispatch('posts/toggleLike', post.value.id);
+    // Оптимистично обновляем UI
+    const currentLikes = { ...(post.value.likes || {}) };
+    if (currentLikes[user.uid]) {
+      delete currentLikes[user.uid];
+    } else {
+      currentLikes[user.uid] = true;
+    }
+    post.value = { ...post.value, likes: currentLikes };
+
+    // Отправляем запрос на сервер
+    const updatedPost = await store.dispatch('posts/toggleLike', post.value.id);
+    // Обновляем пост данными с сервера
+    post.value = updatedPost;
   } catch (error) {
     toast.error('Не удалось поставить лайк');
     console.error('Error toggling like:', error);
-  }
-};
-
-const toggleLike = async () => {
-  try {
-    await store.dispatch('posts/toggleLike', post.value.id);
-  } catch (error) {
-    console.error('Error toggling like:', error);
+    // В случае ошибки получаем актуальные данные
+    const currentPost = await store.dispatch('posts/fetchPostById', post.value.id);
+    post.value = currentPost;
   }
 };
 

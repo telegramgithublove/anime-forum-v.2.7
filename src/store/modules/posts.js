@@ -293,43 +293,56 @@ export default {
     async toggleLike({ commit, rootState }, postId) {
       const currentUser = rootState.auth.user;
       if (!currentUser) {
-        throw new Error('Необходимо войти в систему');
+        throw new Error('Требуется авторизация');
       }
 
       try {
-        const postRef = dbRef(database, `posts/${postId}`);
-        const snapshot = await get(postRef);
+        const db = getDatabase();
         
-        if (!snapshot.exists()) {
-          throw new Error('Пост не найден');
+        // Сначала найдем категорию, содержащую этот пост
+        const categoriesRef = dbRef(db, 'categories');
+        const categoriesSnapshot = await get(categoriesRef);
+        
+        if (categoriesSnapshot.exists()) {
+          const categories = categoriesSnapshot.val();
+          
+          // Ищем пост во всех категориях
+          for (const categoryId in categories) {
+            if (categories[categoryId].posts && categories[categoryId].posts[postId]) {
+              const postRef = dbRef(db, `categories/${categoryId}/posts/${postId}`);
+              const postSnapshot = await get(postRef);
+              
+              if (postSnapshot.exists()) {
+                const post = postSnapshot.val();
+                const likes = post.likes || {};
+                
+                if (likes[currentUser.uid]) {
+                  delete likes[currentUser.uid];
+                } else {
+                  likes[currentUser.uid] = true;
+                }
+                
+                // Обновляем лайки в базе данных
+                await update(postRef, { likes });
+                
+                const updatedPost = {
+                  ...post,
+                  id: postId,
+                  categoryId,
+                  likes
+                };
+                
+                // Обновляем состояние в store
+                commit('SET_POST', updatedPost);
+                return updatedPost;
+              }
+            }
+          }
         }
         
-        const post = {
-          id: postId,
-          ...snapshot.val()
-        };
-        
-        const likes = post.likes || [];
-        const userIndex = likes.indexOf(currentUser.uid);
-        
-        if (userIndex === -1) {
-          likes.push(currentUser.uid);
-        } else {
-          likes.splice(userIndex, 1);
-        }
-        
-        await update(postRef, { likes });
-        
-        const updatedPost = {
-          ...post,
-          likes
-        };
-        
-        commit('UPDATE_POST', updatedPost);
-        return updatedPost;
+        throw new Error('Пост не найден');
       } catch (error) {
         console.error('Ошибка при обновлении лайка:', error);
-        commit('SET_ERROR', error.message);
         throw error;
       }
     },
@@ -656,18 +669,13 @@ export default {
   getters: {
     getAllPosts: state => state.posts,
     
-    getCurrentPost: state => state.currentPost,
-    
-    getEditingPost: state => state.editingPost,
-    
     getPostById: state => id => state.posts[id],
     
-    getPostsByCategory: state => categoryId => 
-      Object.values(state.posts).filter(post => post.categoryId === categoryId),
+    getCurrentPost: state => state.currentPost,
     
-    getCommentsByPostId: state => postId => {
-      const comments = state.comments[postId] || []
-      return comments.sort((a, b) => b.createdAt - a.createdAt)
+    getPostComments: state => postId => {
+      const comments = state.comments[postId] || [];
+      return comments.sort((a, b) => b.createdAt - a.createdAt);
     },
     
     isLoading: state => state.loading,
