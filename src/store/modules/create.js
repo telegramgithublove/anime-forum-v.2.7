@@ -52,9 +52,9 @@ export default {
           ...postData,
           userId: user.uid,
           authorId: user.uid, // Добавляем authorId для связи с профилем
-          authorName: userProfile.username || 'Анонимный пользователь',
+          authorName: userProfile.username || 'Guest',
           authorAvatar: userProfile.avatarUrl || '/image/empty_avatar.png',
-          authorSignature: userProfile.signature || 'Участник форума',
+          authorSignature: userProfile.signature || 'New User',
           createdAt: new Date().toISOString()
         };
 

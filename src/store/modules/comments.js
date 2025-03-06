@@ -69,9 +69,9 @@ export default {
           content,
           author: {
             uid: currentUser.uid,
-            username: userProfile.username || 'Гость',
+            username: userProfile.username || 'Guest',
             avatarUrl: userProfile.avatarUrl || '/image/empty_avatar.png',
-            signature: userProfile.signature || 'Участник форума'
+            signature: userProfile.signature || 'New User'
           },
           createdAt: new Date().toISOString(),
           likes: 0,

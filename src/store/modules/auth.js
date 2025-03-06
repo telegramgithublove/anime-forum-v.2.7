@@ -128,7 +128,7 @@ const actions = {
       const userProfile = {
         username: userData.username,
         avatarUrl: '/image/empty_avatar.png',
-        signature: 'Новый пользователь'
+        signature: 'New User'
       };
 
       // Обновляем профиль пользователя в state немедленно
@@ -163,7 +163,7 @@ const actions = {
         profile: {
           username: userData.username,
           avatarUrl: '/image/empty_avatar.png',
-          signature: 'Новый пользователь'
+          signature: 'New User'
         },
         settings: userDataForDB.settings
       };
