@@ -140,7 +140,7 @@ export default {
         if (snapshot.exists()) {
           // Убираем лайк
           await remove(likeRef);
-          commit('UPDATE_COMMENT_LIKES', { commentId, increment: -1, userId: currentUser.uid });
+          commit('UPDATE_COMMENT_LIKES', { commentId, increment: 0, userId: currentUser.uid });
         } else {
           // Добавляем лайк
           await set(likeRef, true);
