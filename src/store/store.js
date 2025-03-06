@@ -13,7 +13,7 @@ import createModule from './modules/create.js';
 import postsModule from './modules/posts.js';
 import tegsModule from './modules/tegs.js';
 import progressModule from './modules/progress.js';
-
+import commentsModule from './modules/comments.js';
 
 const store = createStore({
   modules: {
@@ -29,7 +29,8 @@ const store = createStore({
     create: createModule,
     posts: postsModule,
     tegs: tegsModule,
-    progress: progressModule
+    progress: progressModule,
+    comments: commentsModule
   }
 });
 

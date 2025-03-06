@@ -156,148 +156,112 @@
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
           <i class="fas fa-comments mr-3 text-purple-500"></i>
           Комментарии
-          <span class="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">({{ comments.length }})</span>
+          <span class="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">
+            ({{ comments.length }})
+          </span>
         </h2>
 
         <!-- Список комментариев -->
-        <TransitionGroup 
-          name="comment-list"
-          tag="div"
-          class="space-y-6"
-        >
+        <div class="space-y-6">
           <div
             v-for="comment in comments"
             :key="comment.id"
-            class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg transform hover:scale-[1.02] transition-all duration-300"
+            class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg"
           >
             <div class="p-6">
-              <!-- Шапка комментария -->
               <div class="flex items-start space-x-4">
                 <!-- Аватар -->
-                <div class="flex-shrink-0 group relative">
-                  <img 
-                    :src="comment.author?.avatarUrl || '/image/empty_avatar.png'"
-                    :alt="comment.author?.username || currentUser.username || 'Гость'"
-                    class="w-12 h-12 rounded-full object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
-                  >
-                  <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"
-                       v-if="comment.author.online"></div>
-                </div>
+                <img 
+                  :src="comment.author?.avatarUrl || '/image/empty_avatar.png'"
+                  :alt="comment.author?.username || 'Гость'"
+                  class="w-12 h-12 rounded-full object-cover"
+                  @error="handleAvatarError"
+                >
 
-                <!-- Информация об авторе -->
                 <div class="flex-1">
+                  <!-- Информация об авторе -->
                   <div class="flex items-center justify-between">
                     <div>
-                      <h3 class="text-lg font-medium text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400 transition-colors duration-300">
-                        {{ comment.author.username || currentUser.username || 'Гость' }}
+                      <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {{ comment.author?.username || 'Гость' }}
                       </h3>
                       <p class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ comment.author.signature || currentUser.signature || 'Участник форума' }}
+                        {{ comment.author?.signature || 'Участник форума' }}
                       </p>
                     </div>
-                    <span class="text-sm text-gray-500 dark:text-gray-400 flex items-center">
-                      <i class="far fa-clock mr-2"></i>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
                       {{ formatDate(comment.createdAt) }}
                     </span>
                   </div>
-                </div>
-              </div>
 
-              <!-- Контент комментария -->
-              <div class="mt-4 pl-16">
-                <div class="prose prose-purple dark:prose-invert max-w-none" v-html="comment.content"></div>
-                
-                <!-- Прикрепленные файлы -->
-                <div v-if="comment.attachments?.length" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div v-for="(attachment, index) in comment.attachments" 
-                       :key="index"
-                       class="relative group rounded-lg overflow-hidden">
-                    <img 
-                      v-if="attachment.type === 'image'"
-                      :src="attachment.url"
-                      class="w-full h-48 object-cover transform group-hover:scale-110 transition-transform duration-300"
-                      @click="openMediaPreview(attachment.url)"
-                      @error="handleImageError"
+                  <!-- Текст комментария -->
+                  <div class="mt-4 text-gray-600 dark:text-gray-300">
+                    {{ comment.content }}
+                  </div>
+
+                  <!-- Действия -->
+                  <div class="mt-4 flex items-center space-x-4">
+                    <button 
+                      @click="likeComment(comment.id)"
+                      class="text-sm flex items-center space-x-2 text-gray-500 hover:text-red-500"
                     >
-                    <video 
-                      v-else-if="attachment.type === 'video'"
-                      :src="attachment.url"
-                      class="w-full h-48 object-cover"
-                      controls
-                    ></video>
+                      <i class="fas fa-heart"></i>
+                      <span>{{ comment.likes || 0 }}</span>
+                    </button>
+                    <button 
+                      @click="replyToComment(comment.id)"
+                      class="text-sm flex items-center space-x-2 text-gray-500 hover:text-blue-500"
+                    >
+                      <i class="fas fa-reply"></i>
+                      <span>Ответить</span>
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              <!-- Действия с комментарием -->
-              <div class="mt-4 pl-16 flex items-center space-x-4">
-                <button 
-                  @click="likeComment(comment.id)"
-                  class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-colors duration-300"
-                  :class="{ 'text-red-500': comment.isLiked }"
-                >
-                  <i class="fas" :class="comment.isLiked ? 'fa-heart' : 'fa-heart'"></i>
-                  <span>{{ comment.likes || 0 }}</span>
-                </button>
-                <button 
-                  @click="replyToComment(comment.id)"
-                  class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors duration-300"
-                >
-                  <i class="fas fa-reply"></i>
-                  <span>Ответить</span>
-                </button>
-                <button 
-                  v-if="canEditComment(comment)"
-                  @click="editComment(comment.id)"
-                  class="flex items-center space-x-2 text-gray-500 hover:text-purple-500 transition-colors duration-300"
-                >
-                  <i class="fas fa-edit"></i>
-                  <span>Редактировать</span>
-                </button>
               </div>
             </div>
 
-            <!-- Вложенные ответы -->
+            <!-- Ответы -->
             <div v-if="comment.replies?.length" class="border-t border-gray-100 dark:border-gray-700">
-              <TransitionGroup 
-                name="reply-list"
-                tag="div"
-                class="divide-y divide-gray-100 dark:divide-gray-700"
+              <div 
+                v-for="reply in comment.replies" 
+                :key="reply.id"
+                class="p-4 pl-16 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
               >
-                <div
-                  v-for="reply in comment.replies"
-                  :key="reply.id"
-                  class="p-4 pl-16 bg-gray-50 dark:bg-gray-800/50"
-                >
-                  <div class="flex items-start space-x-3">
-                    <img 
-                      :src="reply.author?.avatarUrl || '/image/empty_avatar.png'"
-                      :alt="reply.author?.username || currentUser.username || 'Гость'"
-                      class="w-8 h-8 rounded-full object-cover"
-                    >
-                    <div class="flex-1">
-                      <div class="flex items-center space-x-2">
-                        <h4 class="font-medium text-gray-900 dark:text-white">
-                          {{ reply.author.username || currentUser.username || 'Гость' }}
-                        </h4>
-                        <span class="text-sm text-gray-500">{{ formatDate(reply.createdAt) }}</span>
-                      </div>
-                      <div class="mt-1 text-gray-700 dark:text-gray-300" v-html="reply.content"></div>
+                <div class="flex items-start space-x-3">
+                  <img 
+                    :src="reply.author?.avatarUrl || '/image/empty_avatar.png'"
+                    :alt="reply.author?.username || 'Гость'"
+                    class="w-8 h-8 rounded-full object-cover"
+                    @error="handleAvatarError"
+                  >
+                  <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                      <h4 class="font-medium text-gray-900 dark:text-white">
+                        {{ reply.author?.username || 'Гость' }}
+                      </h4>
+                      <span class="text-sm text-gray-500">
+                        {{ formatDate(reply.createdAt) }}
+                      </span>
                     </div>
+                    <p class="mt-1 text-gray-600 dark:text-gray-300">
+                      {{ reply.content }}
+                    </p>
                   </div>
                 </div>
-              </TransitionGroup>
+              </div>
             </div>
           </div>
-        </TransitionGroup>
 
-        <!-- Сообщение, если нет комментариев -->
-        <div 
-          v-if="!comments.length"
-          class="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl shadow-sm"
-        >
-          <i class="far fa-comments text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-          <p class="text-gray-500 dark:text-gray-400">Будьте первым, кто оставит комментарий!</p>
+          <!-- Нет комментариев -->
+          <div 
+            v-if="!comments.length"
+            class="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl shadow-sm"
+          >
+            <i class="far fa-comments text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
+            <p class="text-gray-500 dark:text-gray-400">
+              Будьте первым, кто оставит комментарий!
+            </p>
+          </div>
         </div>
       </div>
 
@@ -379,13 +343,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
 
+const store = useStore();
 const route = useRoute();
 const router = useRouter();
-const store = useStore();
 const toast = useToast();
 
+// Состояния
 const post = ref(null);
-const comments = ref([]);
+const comments = computed(() => store.getters['comments/getComments'] || []);
 const newComment = ref('');
 const showActions = ref(false);
 const isLoading = ref(true);
@@ -407,7 +372,7 @@ onMounted(async () => {
     post.value = postData;
     
     // Загружаем комментарии
-    const commentsData = await store.dispatch('posts/fetchComments', postId);
+    const commentsData = await store.dispatch('comments/fetchComments', postId);
     comments.value = commentsData || [];
     
     isLoading.value = false;
@@ -552,17 +517,29 @@ const handleAvatarError = (event) => {
 const submitComment = async () => {
   try {
     if (!commentContent.value.trim()) {
+      toast.warning('Пожалуйста, введите текст комментария');
+      return;
+    }
+
+    // Проверяем авторизацию
+    const currentUser = store.state.auth.user;
+    if (!currentUser || !currentUser.uid) {
+      toast.error('Пожалуйста, войдите в систему, чтобы оставить комментарий');
       return;
     }
 
     const commentData = {
       postId: post.value.id,
-      content: commentContent.value,
+      content: commentContent.value.trim(),
       attachments: commentImages.value,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      userId: currentUser.uid
     };
 
-    await store.dispatch('posts/createComment', commentData);
+    await store.dispatch('comments/addComment', {
+      postId: route.params.id,
+      content: commentContent.value.trim()
+    });
     
     // Очищаем форму
     commentContent.value = '';
@@ -612,9 +589,13 @@ const sharePost = async () => {
 
 const likeComment = async (commentId) => {
   try {
-    await store.dispatch('posts/likeComment', commentId);
+    await store.dispatch('comments/likeComment', {
+      postId: route.params.id,
+      commentId
+    });
   } catch (error) {
     console.error('Error liking comment:', error);
+    toast.error('Не удалось поставить лайк');
   }
 };
 
