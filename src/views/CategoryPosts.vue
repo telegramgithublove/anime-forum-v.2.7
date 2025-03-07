@@ -2,13 +2,23 @@
   <div class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 py-8 px-4 sm:px-6 lg:px-8">
     <div class="max-w-7xl mx-auto">
       <div class="flex justify-between items-center mb-8">
-        <div>
-          <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-600 to-indigo-500 bg-clip-text text-transparent animate-gradient-text">
-            {{ categoryName || 'Категория' }}
-          </h1>
-          <p class="mt-2 text-gray-600 dark:text-gray-400 max-w-2xl">
-            {{ categoryDescription || 'Описание категории будет здесь...' }}
-          </p>
+        <div class="flex items-center gap-4">
+          <!-- Стрелка назад на главную -->
+          <router-link 
+            to="/" 
+            class="flex items-center justify-center w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-purple-600 hover:text-purple-600 dark:hover:text-purple-200 transition-all duration-300 shadow-sm transform hover:scale-105"
+            title="На главную"
+          >
+            <i class="fas fa-arrow-left text-lg"></i>
+          </router-link>
+          <div>
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-purple-600 to-indigo-500 bg-clip-text text-transparent animate-gradient-text">
+              {{ categoryName || 'Категория' }}
+            </h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-400 max-w-2xl">
+              {{ categoryDescription || 'Описание категории будет здесь...' }}
+            </p>
+          </div>
         </div>
         <router-link :to="{ name: 'create-post', params: { categoryId } }" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-500 text-white font-medium rounded-full hover:from-purple-700 hover:to-indigo-600 transform hover:-translate-y-1 transition-all duration-300 shadow-lg">
           <i class="fas fa-plus mr-2"></i>
