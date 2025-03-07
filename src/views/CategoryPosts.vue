@@ -15,7 +15,7 @@
           Новая тема
         </router-link>
       </div>
-      <!-- Остальная часть шаблона остаётся без изменений -->
+
       <div v-if="posts.length > 0 && !isLoading" class="space-y-6">
         <div v-for="post in sortedPosts" :key="post.id" class="group">
           <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 overflow-hidden">
@@ -53,8 +53,9 @@
             <div class="flex items-center justify-between px-8 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
               <div class="flex items-center space-x-4">
                 <button 
-                  @click="toggleLike(post.id)"
+                  @click.stop="toggleLike(post.id)"
                   class="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-500 transition-colors duration-200"
+                  :disabled="isLoadingLikes"
                 >
                   <i class="fas" :class="post.isLiked ? 'fa-heart text-purple-600 dark:text-purple-500' : 'fa-heart'"></i>
                   <span>{{ post.likesCount }}</span>
@@ -104,6 +105,7 @@ const posts = ref([]);
 const categoryName = ref('');
 const categoryDescription = ref('');
 const isLoading = ref(true);
+const isLoadingLikes = ref(false); // Для блокировки кнопки лайка во время запроса
 const loadingProgress = ref(0);
 let unsubscribe = null;
 
@@ -132,14 +134,22 @@ onMounted(async () => {
         if (snapshot.exists()) {
           const postsData = snapshot.val();
           const postsArray = await Promise.all(Object.entries(postsData).map(async ([id, post]) => {
+            // Загружаем профиль автора
             await store.dispatch('profile/fetchProfile', post.authorId);
             const authorProfile = store.getters['profile/getProfile'];
             
+            // Проверяем аватар: если есть в профиле — берём его, иначе — заглушка
+            const authorAvatar = authorProfile?.avatarUrl || '/image/empty_avatar.png';
+            
+            // Проверяем, лайкнул ли текущий пользователь пост
+            const currentUserId = store.state.auth.user?.uid;
+            const isLiked = post.likes && post.likes[currentUserId] || false;
+
             return {
               id,
               ...post,
               authorName: authorProfile?.username || post.authorName || 'Анонимный пользователь',
-              authorAvatar: authorProfile?.avatarUrl || '/image/empty_avatar.png',
+              authorAvatar,
               authorSignature: authorProfile?.signature || 'Участник форума',
               tags: Array.isArray(post.tags) ? post.tags : (post.tags ? [post.tags] : ['форум']),
               likes: post.likes || {},
@@ -147,7 +157,7 @@ onMounted(async () => {
               comments: post.comments || [],
               views: post.views || 0,
               createdAt: post.createdAt || 0,
-              isLiked: post.likes && post.likes[store.state.auth.user?.uid] || false
+              isLiked
             };
           }));
           posts.value = postsArray;
@@ -189,13 +199,24 @@ const formatDate = (timestamp) => {
 
 const toggleLike = async (postId) => {
   try {
+    isLoadingLikes.value = true;
     const updatedPost = await store.dispatch('posts/toggleLike', postId);
     const postIndex = posts.value.findIndex(p => p.id === postId);
     if (postIndex !== -1) {
-      posts.value[postIndex] = { ...posts.value[postIndex], ...updatedPost };
+      const currentUserId = store.state.auth.user?.uid;
+      const isLiked = updatedPost.likes && updatedPost.likes[currentUserId] || false;
+      posts.value[postIndex] = {
+        ...posts.value[postIndex],
+        likes: updatedPost.likes,
+        likesCount: updatedPost.likesCount,
+        isLiked
+      };
+      console.log('[CategoryPosts] Updated post after like:', posts.value[postIndex]);
     }
   } catch (error) {
     console.error('Ошибка при переключении лайка:', error);
+  } finally {
+    isLoadingLikes.value = false;
   }
 };
 </script>
