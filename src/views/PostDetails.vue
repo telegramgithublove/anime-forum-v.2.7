@@ -1,11 +1,10 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 p-4 sm:p-6 md:p-8">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl mx-auto space-y-8">
       <!-- Кнопка назад -->
-      <button @click="goBack" 
-              class="group mb-6 flex items-center space-x-2 text-gray-600 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors duration-300">
-        <i class="fas fa-arrow-left transform group-hover:-translate-x-1 transition-transform duration-300"></i>
-        <span class="text-sm font-medium">Назад</span>
+      <button @click="goBack" class="group flex items-center space-x-2 text-gray-600 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-all duration-300">
+        <i class="fas fa-arrow-left text-lg transform group-hover:-translate-x-1 transition-transform duration-300"></i>
+        <span class="text-sm font-semibold uppercase tracking-wide">Назад</span>
       </button>
 
       <!-- Загрузка -->
@@ -13,190 +12,132 @@
         <div class="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mx-auto"></div>
       </div>
 
-      <!-- Основная карточка поста -->
-      <div v-else-if="post" class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
-        <!-- Шапка поста -->
-        <div class="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div class="flex items-start space-x-6">
-            <!-- Аватар и информация об авторе -->
-            <div class="flex-shrink-0 group">
-              <div class="relative ml-7">
+      <!-- Контейнер поста и комментариев -->
+      <div v-else-if="post" class="space-y-12">
+        <!-- Карточка поста -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden transform hover:shadow-2xl transition-all duration-300">
+          <!-- Шапка поста -->
+          <div class="p-6 border-b border-gray-100 dark:border-gray-700">
+            <div class="flex items-center space-x-6">
+              <div class="flex-shrink-0 group">
                 <img :src="authorData.avatar || '/image/empty_avatar.png'"
                      :alt="authorData.name"
-                     class="w-20 h-20 rounded-full object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
+                     class="w-16 h-16 rounded-full object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
                      @error="handleAvatarError">
-              </div>
-              <div class="mt-3 text-center">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ authorData.name }}</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ authorData.signature }}</p>
-              </div>
-            </div>
-
-            <!-- Основная информация -->
-            <div class="flex-1">
-              <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
-                {{ post.title }}
-              </h1>
-              
-              <!-- Метаданные -->
-              <div class="mt-4 flex items-center space-x-4 text-sm text-gray-500">
-                <span class="flex items-center">
-                  <i class="fas fa-calendar-alt mr-2"></i>
-                  {{ formatDate(post.createdAt) }}
-                </span>
-                <span class="flex items-center">
-                  <i class="fas fa-clock mr-2"></i>
-                  {{ formatTime(post.createdAt) }}
-                </span>
-              </div>
-
-              <!-- Теги -->
-              <div v-if="post.tags && post.tags.length" class="mt-4 flex flex-wrap gap-2">
-                <span v-for="tag in post.tags" 
-                      :key="tag"
-                      class="px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 rounded-full text-sm">
-                  #{{ tag }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Содержимое поста -->
-        <div class="p-6">
-          <!-- Текст поста -->
-          <div class="prose dark:prose-invert max-w-none" v-html="post.content || ''"></div>
-
-          <!-- Изображения -->
-          <div v-if="post.pictures && Object.keys(post.pictures).length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
-            <div v-for="(image, index) in Object.values(post.pictures)" :key="index" class="relative group">
-              <img 
-                :src="getImageUrl(image)"
-                class="w-full h-48 object-cover rounded-lg shadow-md"
-                :alt="'Изображение ' + (index + 1)"
-                @error="handleImageError"
-              >
-            </div>
-          </div>
-
-          <!-- Видео -->
-          <div v-if="post.videos && post.videos.length" class="mt-6 space-y-4">
-            <div v-for="(video, index) in post.videos" :key="index" class="relative">
-              <video 
-                :src="video"
-                class="w-full rounded-lg"
-                controls
-                preload="metadata">
-              </video>
-            </div>
-          </div>
-
-          <!-- Аудио -->
-          <div v-if="post.audio && post.audio.length" class="mt-6 space-y-4">
-            <div v-for="(audioFile, index) in post.audio" :key="index" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <audio 
-                :src="audioFile"
-                class="w-full"
-                controls
-                preload="metadata">
-              </audio>
-            </div>
-          </div>
-
-          <!-- Документы -->
-          <div v-if="post.documents && post.documents.length" class="mt-6 space-y-3">
-            <div v-for="(doc, index) in post.documents" :key="index" class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-300">
-              <div class="flex items-center space-x-3">
-                <i class="fas fa-file-alt text-2xl text-purple-500"></i>
-                <div>
-                  <span class="text-gray-900 dark:text-white font-medium">{{ doc.name || `Документ ${index + 1}` }}</span>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">{{ formatFileSize(doc.size) }}</p>
+                <div class="mt-2 text-center">
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ authorData.name }}</h3>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ authorData.signature }}</p>
                 </div>
               </div>
-              <button @click="downloadDocument(doc.url, doc.name)"
-                      class="flex items-center space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors duration-300">
-                <i class="fas fa-download"></i>
-                <span>Скачать</span>
+              <div class="flex-1">
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 leading-tight">
+                  {{ post.title }}
+                </h1>
+                <div class="mt-3 flex items-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
+                  <span class="flex items-center">
+                    <i class="fas fa-calendar-alt mr-2"></i>
+                    {{ formatDate(post.createdAt) }}
+                  </span>
+                  <span class="flex items-center">
+                    <i class="fas fa-clock mr-2"></i>
+                    {{ formatTime(post.createdAt) }}
+                  </span>
+                </div>
+                <div v-if="post.tags && post.tags.length" class="mt-4 flex flex-wrap gap-2">
+                  <span v-for="tag in post.tags" :key="tag" class="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 rounded-full text-xs font-medium">
+                    #{{ tag }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Содержимое поста -->
+          <div class="p-6">
+            <div class="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-200" v-html="post.content || ''"></div>
+            <div v-if="post.pictures && Object.keys(post.pictures).length" class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+              <div v-for="(image, index) in Object.values(post.pictures)" :key="index" class="relative group">
+                <img :src="getImageUrl(image)" class="w-full h-40 object-cover rounded-lg shadow-md transform group-hover:scale-105 transition-transform duration-300" :alt="'Изображение ' + (index + 1)" @error="handleImageError">
+              </div>
+            </div>
+            <div v-if="post.videos && post.videos.length" class="mt-6 space-y-4">
+              <div v-for="(video, index) in post.videos" :key="index">
+                <video :src="video" class="w-full rounded-lg shadow-md" controls preload="metadata"></video>
+              </div>
+            </div>
+            <div v-if="post.audio && post.audio.length" class="mt-6 space-y-4">
+              <div v-for="(audioFile, index) in post.audio" :key="index" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow-sm">
+                <audio :src="audioFile" class="w-full" controls preload="metadata"></audio>
+              </div>
+            </div>
+            <div v-if="post.documents && post.documents.length" class="mt-6 space-y-3">
+              <div v-for="(doc, index) in post.documents" :key="index" class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-300">
+                <div class="flex items-center space-x-3">
+                  <i class="fas fa-file-alt text-xl text-purple-500"></i>
+                  <div>
+                    <span class="text-gray-900 dark:text-white font-medium">{{ doc.name || `Документ ${index + 1}` }}</span>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ formatFileSize(doc.size) }}</p>
+                  </div>
+                </div>
+                <button @click="downloadDocument(doc.url, doc.name)" class="flex items-center space-x-2 px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-all duration-300">
+                  <i class="fas fa-download"></i>
+                  <span class="text-sm">Скачать</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Действия с постом -->
+          <div class="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-6">
+                <button @click="handleLike" class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition-all duration-300" :class="{ 'text-red-500': isLikedByCurrentUser }">
+                  <i class="fas fa-heart text-lg" :class="{ 'fas': isLikedByCurrentUser, 'far': !isLikedByCurrentUser }"></i>
+                  <span class="text-sm font-medium">{{ likesCount }}</span>
+                </button>
+                <button @click="focusComment" class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-all duration-300">
+                  <i class="fas fa-comment text-lg"></i>
+                  <span class="text-sm font-medium">{{ comments.length }}</span>
+                </button>
+              </div>
+              <button @click="sharePost" class="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-all duration-300">
+                <i class="fas fa-share-alt text-lg"></i>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Действия с постом -->
-        <div class="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-              <button @click="handleLike" 
-                      class="flex items-center space-x-2 text-gray-500 hover:text-red-500 transition Ecolors duration-300"
-                      :class="{ 'text-red-500': isLikedByCurrentUser }">
-                <i class="fas fa-heart" :class="{ 'fas': isLikedByCurrentUser, 'far': !isLikedByCurrentUser }"></i>
-                <span>{{ likesCount }}</span>
-              </button>
-              <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors duration-300"
-                      @click="focusComment">
-                <i class="fas fa-comment"></i>
-                <span>{{ comments.length }}</span>
-              </button>
-            </div>
-            <button @click="sharePost" 
-                    class="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300">
-              <i class="fas fa-share-alt"></i>
-            </button>
+        <!-- Секция комментариев -->
+        <div class="space-y-6">
+          <div class="flex items-center space-x-3">
+            <i class="fas fa-comments text-2xl text-purple-500"></i>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Комментарии</h2>
+            <span class="text-sm font-medium text-gray-500 dark:text-gray-400">({{ totalComments }})</span>
           </div>
-        </div>
-
-        <!-- Секция комментариев с пагинацией -->
-        <div class="mt-8">
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
-            <i class="fas fa-comments mr-3 text-purple-500"></i>
-            Комментарии
-            <span class="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">
-              ({{ totalComments }})
-            </span>
-          </h2>
           <Comments :post-id="postId" :current-page="currentPage" :items-per-page="itemsPerPage" />
-          <Pagination 
-            :total-items="totalComments" 
-            :items-per-page="itemsPerPage" 
-            :current-page="currentPage"
-            @page-changed="handlePageChange"
-          />
+          <Pagination :total-items="totalComments" :items-per-page="itemsPerPage" :current-page="currentPage" @page-changed="handlePageChange" />
         </div>
 
         <!-- Форма комментария -->
-        <div class="mt-6">
-          <h2 class="text-2xl font-bold mb-4">Оставить комментарий</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-            <div class="flex items-center space-x-4">
-              <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" 
-                   :alt="currentUser.username || 'Гость'" 
-                   @error="handleAvatarError"
-                   class="w-14 h-14 rounded-full object-cover border-2 border-purple-500">
-              <div class="flex-1">
-                <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
-                <div ref="commentEditor" contenteditable="true" 
-                     class="mt-3 p-4 border border-gray-200 dark:border-gray-700 rounded-t-2xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] w-[600px]"
-                     @input="handleCommentInput"
-                     @keydown="handleKeyDown"
-                     @focus="syncEditorContent">{{ commentContent }}</div>
-                <div class="flex justify-end w-[600px]">
-                  <div class="inline-flex items-center space-x-1.5 text-sm px-4 py-1.5 rounded-b-xl border-x border-b"
-                       :class="{
-                         'bg-red-50 text-red-600 border-red-200': remainingChars <= 0,
-                         'bg-yellow-50 text-yellow-600 border-yellow-200': remainingChars <= 50 && remainingChars > 0,
-                         'bg-gray-50 text-gray-600 border-gray-200': remainingChars > 50
-                       }">
-                    <span class="font-mono font-medium">{{ remainingChars }}</span>
-                    <span class="font-medium tracking-tight">символов осталось</span>
-                  </div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 transform hover:shadow-2xl transition-all duration-300">
+          <div class="flex items-center space-x-3 mb-4">
+            <i class="fas fa-pen-alt text-2xl text-purple-500"></i>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Оставить комментарий</h2>
+          </div>
+          <div class="flex items-start space-x-4">
+            <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" :alt="currentUser.username || 'Гость'" @error="handleAvatarError" class="w-12 h-12 rounded-full object-cover border-2 border-purple-500">
+            <div class="flex-1 space-y-3">
+              <div class="text-base font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
+              <div ref="commentEditor" contenteditable="true" class="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[120px] transition-all duration-300 hover:bg-gray-200 dark:hover:bg-gray-600" @input="handleCommentInput" @keydown="handleKeyDown" @focus="syncEditorContent">{{ commentContent }}</div>
+              <div class="flex items-center justify-between">
+                <div class="inline-flex items-center space-x-1.5 text-sm px-3 py-1 bg-gray-50 dark:bg-gray-700 rounded-full" :class="{ 'text-red-600': remainingChars <= 0, 'text-yellow-600': remainingChars <= 50 && remainingChars > 0, 'text-gray-600': remainingChars > 50 }">
+                  <span class="font-mono font-medium">{{ remainingChars }}</span>
+                  <span class="font-medium">символов осталось</span>
                 </div>
-                <div class="flex items-center justify-end p-4 space-x-2">
-                  <button @click="submitComment" 
-                          class="px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-all duration-300 flex items-center space-x-2">
-                    <i class="fas fa-paper-plane"></i>
-                    <span>Отправить</span>
-                  </button>
-                </div>
+                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300">
+                  <i class="fas fa-paper-plane"></i>
+                  <span class="text-sm font-medium">Отправить</span>
+                </button>
               </div>
             </div>
           </div>
@@ -224,7 +165,6 @@ const comments = computed(() => store.getters['comments/getComments'] || []);
 const isLoading = ref(true);
 const postId = computed(() => route.params.id);
 
-// Пагинация
 const currentPage = computed(() => store.getters['pagination/getCurrentPage']);
 const itemsPerPage = ref(10);
 const allComments = computed(() => store.getters['comments/getComments'] || []);
@@ -241,7 +181,7 @@ onMounted(async () => {
     const postData = await store.dispatch('posts/fetchPostById', postId.value);
     post.value = postData || null;
     await store.dispatch('comments/fetchComments', postId.value);
-    store.dispatch('pagination/setTotalItems', allComments.value.length); // Инициализация totalItems
+    store.dispatch('pagination/setTotalItems', allComments.value.length);
     isLoading.value = false;
   } catch (error) {
     console.error('Error loading post or comments:', error);
@@ -285,10 +225,7 @@ const isLikedByCurrentUser = computed(() => {
   return Boolean(post.value.likes[user.uid]);
 });
 
-const goBack = () => {
-  router.back();
-};
-
+const goBack = () => router.back();
 const handleLike = async () => {
   const user = store.state.auth.user;
   if (!user) {
@@ -303,51 +240,35 @@ const handleLike = async () => {
     console.error('Error toggling like:', error);
   }
 };
-
-const focusComment = () => {
-  if (commentEditor.value) {
-    commentEditor.value.focus();
-  }
-};
-
+const focusComment = () => commentEditor.value?.focus();
 const sharePost = async () => {
   try {
-    await navigator.share({
-      title: post.value?.title,
-      text: post.value?.content,
-      url: window.location.href
-    });
+    await navigator.share({ title: post.value?.title, text: post.value?.content, url: window.location.href });
   } catch (error) {
     console.error('Error sharing post:', error);
   }
 };
-
 const handleCommentInput = (event) => {
   const content = event.target.innerText || '';
   if (content.length > MAX_CHARS) {
     event.preventDefault();
     const truncatedContent = content.slice(0, MAX_CHARS);
     commentContent.value = truncatedContent;
-    nextTick(() => {
-      commentEditor.value.innerText = truncatedContent;
-    });
+    nextTick(() => commentEditor.value.innerText = truncatedContent);
   } else {
     commentContent.value = content;
   }
 };
-
 const handleKeyDown = (event) => {
   if (remainingChars.value <= 0 && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
   }
 };
-
 const syncEditorContent = () => {
   if (commentEditor.value && commentEditor.value.innerText !== commentContent.value) {
     commentEditor.value.innerText = commentContent.value;
   }
 };
-
 const submitComment = async () => {
   if (!commentContent.value.trim()) {
     toast.warning('Пожалуйста, введите текст комментария');
@@ -359,35 +280,19 @@ const submitComment = async () => {
     return;
   }
   try {
-    await store.dispatch('comments/addComment', {
-      postId: postId.value,
-      content: commentContent.value.trim()
-    });
+    await store.dispatch('comments/addComment', { postId: postId.value, content: commentContent.value.trim() });
     commentContent.value = '';
-    nextTick(() => {
-      if (commentEditor.value) commentEditor.value.innerText = '';
-    });
-    store.dispatch('pagination/setTotalItems', allComments.value.length); // Обновляем totalItems после добавления
+    nextTick(() => { if (commentEditor.value) commentEditor.value.innerText = ''; });
+    store.dispatch('pagination/setTotalItems', allComments.value.length);
     toast.success('Комментарий успешно добавлен!');
   } catch (error) {
     console.error('Error submitting comment:', error);
     toast.error('Не удалось отправить комментарий');
   }
 };
-
-// Обработчик смены страницы для пагинации
-const handlePageChange = (page) => {
-  store.dispatch('pagination/setCurrentPage', page);
-};
-
-const handleAvatarError = (event) => {
-  event.target.src = '/image/empty_avatar.png';
-};
-
-const handleImageError = (event) => {
-  event.target.src = '/image/error-placeholder.png';
-};
-
+const handlePageChange = (page) => store.dispatch('pagination/setCurrentPage', page);
+const handleAvatarError = (event) => event.target.src = '/image/empty_avatar.png';
+const handleImageError = (event) => event.target.src = '/image/error-placeholder.png';
 const downloadDocument = async (url, fileName) => {
   try {
     const response = await fetch(url);
@@ -406,49 +311,20 @@ const downloadDocument = async (url, fileName) => {
     toast.error('Ошибка при скачивании документа');
   }
 };
-
-const formatDate = (timestamp) => {
-  if (!timestamp) return '';
-  return new Date(timestamp).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-};
-
-const formatTime = (timestamp) => {
-  if (!timestamp) return '';
-  return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-};
-
+const formatDate = (timestamp) => timestamp ? new Date(timestamp).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+const formatTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
 const formatFileSize = (size) => {
   if (!size) return '';
   const units = ['Б', 'КБ', 'МБ', 'ГБ'];
   const index = Math.floor(Math.log(size) / Math.log(1024));
   return `${(size / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
 };
-
-const getImageUrl = (image) => {
-  if (!image) return '';
-  return image;
-};
-
-onBeforeUnmount(() => {
-  if (commentEditor.value) {
-    commentEditor.value.innerText = '';
-  }
-});
+const getImageUrl = (image) => image || '';
+onBeforeUnmount(() => { if (commentEditor.value) commentEditor.value.innerText = ''; });
 </script>
 
 <style scoped>
-.prose :deep(p) {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-.prose :deep(a) {
-  color: #6366f1;
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.prose :deep(a:hover) {
-  color: #4f46e5;
-}
+.prose :deep(p) { margin: 0.5em 0; }
+.prose :deep(a) { color: #6366f1; text-decoration: none; transition: color 0.2s; }
+.prose :deep(a:hover) { color: #4f46e5; }
 </style>

@@ -1,4 +1,4 @@
-import { ref as databaseRef, push, set, get, onValue, update, remove } from 'firebase/database';
+import { ref as databaseRef, push, set, get, onValue, remove } from 'firebase/database';
 import { database } from '../../plugins/firebase';
 
 export default {
@@ -30,16 +30,16 @@ export default {
     SET_ERROR(state, error) {
       state.error = error;
     },
-    UPDATE_COMMENT_LIKES(state, { commentId, increment, userId }) {
+    UPDATE_COMMENT_LIKES(state, { commentId, liked, userId }) {
       const comment = state.comments.find(c => c.id === commentId);
       if (comment) {
-        comment.likes = (comment.likes || 0) + increment;
         if (!comment.likedBy) comment.likedBy = {};
-        if (increment > 0) {
+        if (liked) {
           comment.likedBy[userId] = true;
         } else {
           delete comment.likedBy[userId];
         }
+        comment.likes = Object.keys(comment.likedBy).length; // Всегда вычисляем likes из likedBy
       }
     },
   },
@@ -111,9 +111,11 @@ export default {
           const comments = [];
           if (snapshot.exists()) {
             snapshot.forEach((childSnapshot) => {
+              const commentData = childSnapshot.val();
               comments.push({
                 id: childSnapshot.key,
-                ...childSnapshot.val(),
+                ...commentData,
+                likes: commentData.likedBy ? Object.keys(commentData.likedBy).length : 0, // Вычисляем likes из likedBy
               });
             });
           }
@@ -136,15 +138,15 @@ export default {
       try {
         const likeRef = databaseRef(database, `posts/${postId}/comments/${commentId}/likedBy/${currentUser.uid}`);
         const snapshot = await get(likeRef);
-        
+
         if (snapshot.exists()) {
           // Убираем лайк
           await remove(likeRef);
-          commit('UPDATE_COMMENT_LIKES', { commentId, increment: 0, userId: currentUser.uid });
+          commit('UPDATE_COMMENT_LIKES', { commentId, liked: false, userId: currentUser.uid });
         } else {
           // Добавляем лайк
           await set(likeRef, true);
-          commit('UPDATE_COMMENT_LIKES', { commentId, increment: 1, userId: currentUser.uid });
+          commit('UPDATE_COMMENT_LIKES', { commentId, liked: true, userId: currentUser.uid });
         }
       } catch (error) {
         console.error('Ошибка при установке лайка:', error);
@@ -152,7 +154,6 @@ export default {
       }
     },
 
-    // Добавленное действие addComment
     async addComment({ commit, rootState }, { postId, content }) {
       try {
         const currentUser = rootState.auth.user;
@@ -173,18 +174,16 @@ export default {
             signature: userProfile.signature || 'New User',
           },
           createdAt: new Date().toISOString(),
-          likes: 0,
-          likedBy: {},
+          likedBy: {}, // Инициализируем без likes, только likedBy
         };
 
         const commentsRef = databaseRef(database, `posts/${postId}/comments`);
         const newCommentRef = push(commentsRef);
         await set(newCommentRef, newComment);
 
-        // Добавляем комментарий в состояние
         commit('SET_COMMENTS', [
           ...state.comments,
-          { id: newCommentRef.key, ...newComment }
+          { id: newCommentRef.key, ...newComment, likes: 0 } // Добавляем likes как вычисляемое поле
         ]);
 
         return { success: true };
