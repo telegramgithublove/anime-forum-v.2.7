@@ -124,6 +124,8 @@ const actions = {
         localStorage.setItem('userRole', 'superuser');
         localStorage.setItem('emailVerified', 'true');
         localStorage.setItem('userSettings', JSON.stringify(superUserData.settings));
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userRole', 'superuser');
         return { error: false, user: superUserData, redirectTo: '/admin' };
       }
 
