@@ -100,9 +100,14 @@
                   <span class="text-sm font-medium">{{ comments.length }}</span>
                 </button>
               </div>
-              <button @click="sharePost" class="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-all duration-300">
-                <i class="fas fa-share-alt text-lg"></i>
-              </button>
+              <div class="relative group">
+                <button @click="toggleFavorite" class="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-all duration-300" :class="{ 'text-yellow-500': isFavorite }">
+                  <i class="fas fa-star text-lg" :class="{ 'fas': isFavorite, 'far': !isFavorite }"></i>
+                </button>
+                <span class="absolute right-0 top-[-2rem] w-max px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                  {{ isFavorite ? 'Удалить из избранного' : 'Добавить в избранное' }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -230,7 +235,14 @@ const isLikedByCurrentUser = computed(() => {
   return Boolean(post.value.likes[user.uid]);
 });
 
+const isFavorite = computed(() => {
+  const user = store.state.auth.user;
+  if (!post.value?.favorites || !user) return false;
+  return Boolean(post.value.favorites[user.uid]);
+});
+
 const goBack = () => router.back();
+
 const handleLike = async () => {
   const user = store.state.auth.user;
   if (!user) {
@@ -245,27 +257,40 @@ const handleLike = async () => {
     console.error('Error toggling like:', error);
   }
 };
+
+const toggleFavorite = async () => {
+  const user = store.state.auth.user;
+  if (!user) {
+    toast.warning('Пожалуйста, войдите в систему, чтобы добавить в избранное');
+    return;
+  }
+  try {
+    const updatedPost = await store.dispatch('posts/toggleFavorite', post.value.id);
+    post.value = updatedPost;
+    toast.success(isFavorite.value ? 'Добавлено в избранное' : 'Удалено из избранного');
+  } catch (error) {
+    toast.error('Не удалось обновить избранное');
+    console.error('Error toggling favorite:', error);
+  }
+};
+
 const focusComment = () => {
   const textarea = document.querySelector('textarea');
   if (textarea) textarea.focus();
 };
-const sharePost = async () => {
-  try {
-    await navigator.share({ title: post.value?.title, text: post.value?.content, url: window.location.href });
-  } catch (error) {
-    console.error('Error sharing post:', error);
-  }
-};
+
 const handleCommentInput = (event) => {
   if (event.target.value.length > MAX_CHARS) {
     commentContent.value = event.target.value.slice(0, MAX_CHARS);
   }
 };
+
 const handleKeyDown = (event) => {
   if (remainingChars.value <= 0 && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
   }
 };
+
 const submitComment = async () => {
   if (!commentContent.value.trim()) {
     toast.warning('Пожалуйста, введите текст комментария');
@@ -286,9 +311,11 @@ const submitComment = async () => {
     toast.error('Не удалось отправить комментарий');
   }
 };
+
 const handlePageChange = (page) => store.dispatch('pagination/setCurrentPage', page);
 const handleAvatarError = (event) => event.target.src = '/image/empty_avatar.png';
 const handleImageError = (event) => event.target.src = '/image/error-placeholder.png';
+
 const downloadDocument = async (url, fileName) => {
   try {
     const response = await fetch(url);
@@ -307,6 +334,7 @@ const downloadDocument = async (url, fileName) => {
     toast.error('Ошибка при скачивании документа');
   }
 };
+
 const formatDate = (timestamp) => timestamp ? new Date(timestamp).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
 const formatTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
 const formatFileSize = (size) => {
@@ -315,7 +343,9 @@ const formatFileSize = (size) => {
   const index = Math.floor(Math.log(size) / Math.log(1024));
   return `${(size / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
 };
+
 const getImageUrl = (image) => image || '';
+
 onBeforeUnmount(() => { commentContent.value = ''; });
 </script>
 
