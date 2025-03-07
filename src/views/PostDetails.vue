@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 p-4 sm:p-6 md:p-8">
-    <div class="max-w-4xl mx-auto space-y-8">
+    <div class="max-w-4xl mx-auto space-y-8 pb-48">
       <!-- Кнопка назад -->
       <button @click="goBack" class="group flex items-center space-x-2 text-gray-600 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-all duration-300">
         <i class="fas fa-arrow-left text-lg transform group-hover:-translate-x-1 transition-transform duration-300"></i>
@@ -22,7 +22,7 @@
               <div class="flex-shrink-0 group">
                 <img :src="authorData.avatar || '/image/empty_avatar.png'"
                      :alt="authorData.name"
-                     class="w-16 h-16 rounded-full object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
+                     class="w-16 h-16 rounded-full ml-6 object-cover ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300"
                      @error="handleAvatarError">
                 <div class="mt-2 text-center">
                   <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ authorData.name }}</h3>
@@ -128,13 +128,19 @@
             <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" :alt="currentUser.username || 'Гость'" @error="handleAvatarError" class="w-12 h-12 rounded-full object-cover border-2 border-purple-500">
             <div class="flex-1 space-y-3">
               <div class="text-base font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
-              <div ref="commentEditor" contenteditable="true" class="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[120px] transition-all duration-300 hover:bg-gray-200 dark:hover:bg-gray-600" @input="handleCommentInput" @keydown="handleKeyDown" @focus="syncEditorContent">{{ commentContent }}</div>
+              <textarea
+                v-model="commentContent"
+                placeholder="Напишите ваш комментарий..."
+                class="w-full p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[120px] max-h-[200px] resize-none overflow-y-auto transition-all duration-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                @input="handleCommentInput"
+                @keydown="handleKeyDown"
+              ></textarea>
               <div class="flex items-center justify-between">
                 <div class="inline-flex items-center space-x-1.5 text-sm px-3 py-1 bg-gray-50 dark:bg-gray-700 rounded-full" :class="{ 'text-red-600': remainingChars <= 0, 'text-yellow-600': remainingChars <= 50 && remainingChars > 0, 'text-gray-600': remainingChars > 50 }">
                   <span class="font-mono font-medium">{{ remainingChars }}</span>
                   <span class="font-medium">символов осталось</span>
                 </div>
-                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300">
+                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300" :disabled="!commentContent.trim()">
                   <i class="fas fa-paper-plane"></i>
                   <span class="text-sm font-medium">Отправить</span>
                 </button>
@@ -173,7 +179,6 @@ const totalComments = computed(() => allComments.value.length);
 const MAX_CHARS = 333;
 const commentContent = ref('');
 const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
-const commentEditor = ref(null);
 
 onMounted(async () => {
   try {
@@ -240,7 +245,10 @@ const handleLike = async () => {
     console.error('Error toggling like:', error);
   }
 };
-const focusComment = () => commentEditor.value?.focus();
+const focusComment = () => {
+  const textarea = document.querySelector('textarea');
+  if (textarea) textarea.focus();
+};
 const sharePost = async () => {
   try {
     await navigator.share({ title: post.value?.title, text: post.value?.content, url: window.location.href });
@@ -249,24 +257,13 @@ const sharePost = async () => {
   }
 };
 const handleCommentInput = (event) => {
-  const content = event.target.innerText || '';
-  if (content.length > MAX_CHARS) {
-    event.preventDefault();
-    const truncatedContent = content.slice(0, MAX_CHARS);
-    commentContent.value = truncatedContent;
-    nextTick(() => commentEditor.value.innerText = truncatedContent);
-  } else {
-    commentContent.value = content;
+  if (event.target.value.length > MAX_CHARS) {
+    commentContent.value = event.target.value.slice(0, MAX_CHARS);
   }
 };
 const handleKeyDown = (event) => {
   if (remainingChars.value <= 0 && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
-  }
-};
-const syncEditorContent = () => {
-  if (commentEditor.value && commentEditor.value.innerText !== commentContent.value) {
-    commentEditor.value.innerText = commentContent.value;
   }
 };
 const submitComment = async () => {
@@ -282,7 +279,6 @@ const submitComment = async () => {
   try {
     await store.dispatch('comments/addComment', { postId: postId.value, content: commentContent.value.trim() });
     commentContent.value = '';
-    nextTick(() => { if (commentEditor.value) commentEditor.value.innerText = ''; });
     store.dispatch('pagination/setTotalItems', allComments.value.length);
     toast.success('Комментарий успешно добавлен!');
   } catch (error) {
@@ -320,7 +316,7 @@ const formatFileSize = (size) => {
   return `${(size / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
 };
 const getImageUrl = (image) => image || '';
-onBeforeUnmount(() => { if (commentEditor.value) commentEditor.value.innerText = ''; });
+onBeforeUnmount(() => { commentContent.value = ''; });
 </script>
 
 <style scoped>

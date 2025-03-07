@@ -2,15 +2,12 @@
   <div class="mt-4 pl-16">
     <form @submit.prevent="submitReply" class="space-y-4">
       <div class="flex items-start space-x-3">
-        <!-- Аватар текущего пользователя -->
         <img
-          :src="currentUser?.avatarUrl || '/image/empty_avatar.png'"
-          :alt="currentUser?.username || 'Гость'"
+          :src="currentUser.avatarUrl || '/image/empty_avatar.png'"
+          :alt="currentUser.username || 'Гость'"
           class="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/20"
           @error="handleAvatarError"
         />
-
-        <!-- Поле ввода -->
         <div class="flex-1">
           <textarea
             v-model="replyContent"
@@ -19,22 +16,20 @@
             rows="2"
             @input="adjustTextareaHeight"
           ></textarea>
-
-          <!-- Кнопки -->
           <div class="mt-2 flex justify-end space-x-2">
             <button
               type="button"
               @click="$emit('cancel')"
-              class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200"
             >
               Отмена
             </button>
             <button
               type="submit"
-              :disabled="!replyContent.trim()"
+              :disabled="!replyContent.trim() || isSubmitting"
               class="px-4 py-2 text-sm bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 transition-all duration-200"
             >
-              Отправить
+              {{ isSubmitting ? 'Отправка...' : 'Отправить' }}
             </button>
           </div>
         </div>
@@ -48,7 +43,6 @@ import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
 
-const toast = useToast();
 const props = defineProps({
   commentId: { type: [String, Number], required: true },
   postId: { type: String, required: true },
@@ -56,11 +50,24 @@ const props = defineProps({
 
 const emit = defineEmits(['cancel']);
 const store = useStore();
+const toast = useToast();
+
 const replyContent = ref('');
-const currentUser = computed(() => store.state.auth.user);
+const isSubmitting = ref(false);
+
+const currentUser = computed(() => {
+  const authUser = store.state.auth.user || {};
+  const profile = store.state.profile?.profile || {};
+  return {
+    uid: authUser.uid || '',
+    username: profile.username || authUser.displayName || 'Гость',
+    avatarUrl: profile.avatarUrl || authUser.photoURL || '/image/empty_avatar.png',
+    signature: profile.signature || 'Участник форума',
+  };
+});
 
 const submitReply = async () => {
-  if (!currentUser.value) {
+  if (!currentUser.value.uid) {
     toast.error('Пожалуйста, войдите в систему');
     return;
   }
@@ -68,23 +75,28 @@ const submitReply = async () => {
     toast.warning('Введите текст ответа');
     return;
   }
+  if (isSubmitting.value) return; // Защита от повторной отправки
 
+  isSubmitting.value = true;
   try {
     const result = await store.dispatch('reply/addReply', {
       postId: props.postId,
       commentId: props.commentId,
-      content: replyContent.value,
+      content: replyContent.value.trim(),
     });
+
     if (result.success) {
       replyContent.value = '';
       toast.success('Ответ успешно добавлен');
-      emit('cancel'); // Закрываем форму после успешной отправки
+      emit('cancel');
     } else {
       toast.error(result.error || 'Не удалось добавить ответ');
     }
   } catch (error) {
     console.error('Ошибка при отправке ответа:', error);
-    toast.error('Произошла ошибка');
+    toast.error('Произошла ошибка при отправке');
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
@@ -98,3 +110,14 @@ const adjustTextareaHeight = (event) => {
   textarea.style.height = `${textarea.scrollHeight}px`;
 };
 </script>
+
+<style scoped>
+textarea {
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+</style>

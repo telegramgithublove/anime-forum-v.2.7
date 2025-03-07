@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import ReplyComment from '../views/ReplyComment.vue';
 
@@ -72,10 +72,18 @@ const currentUser = computed(() => store.state.auth.user);
 const activeReplyCommentId = ref(null);
 const isLiking = ref({});
 
-onMounted(() => {
-  store.dispatch('comments/fetchComments', props.postId);
+onMounted(async () => {
+  await store.dispatch('comments/fetchComments', props.postId);
   comments.value.forEach((comment) => {
     store.dispatch('reply/fetchReplies', { postId: props.postId, commentId: comment.id });
+  });
+});
+
+watch(comments, (newComments) => {
+  newComments.forEach((comment) => {
+    if (!store.getters['reply/getReplies'](comment.id).length) {
+      store.dispatch('reply/fetchReplies', { postId: props.postId, commentId: comment.id });
+    }
   });
 });
 
