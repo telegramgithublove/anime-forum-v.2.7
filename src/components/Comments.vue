@@ -1,6 +1,9 @@
 <template>
   <div class="space-y-6">
-    <div class="space-y-6">
+    <div v-if="isLoading" class="text-center py-12">
+      <p class="text-gray-500 dark:text-gray-400">Загрузка комментариев...</p>
+    </div>
+    <div v-else-if="comments.length" class="space-y-6">
       <div v-for="comment in comments" :key="comment.id" class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transform hover:shadow-lg transition-all duration-300 animate-fade-in">
         <div class="flex items-start space-x-4">
           <img :src="comment.author?.avatarUrl || '/image/empty_avatar.png'" :alt="comment.author?.username || 'Гость'" class="w-10 h-10 rounded-full object-cover ring-2 ring-purple-500/30" @error="handleAvatarError">
@@ -26,7 +29,6 @@
             <ReplyComment v-if="activeReplyCommentId === comment.id" :comment-id="comment.id" :post-id="postId" @cancel="toggleReplyForm(null)" class="mt-4" />
           </div>
         </div>
-        <!-- Ответы -->
         <div v-if="replies(comment.id).length" class="mt-4 space-y-4 pl-8 border-l-2 border-purple-500/20">
           <div v-for="reply in replies(comment.id)" :key="reply.id" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow-sm transform hover:scale-102 transition-all duration-300 animate-fade-in">
             <div class="flex items-start space-x-3">
@@ -43,7 +45,7 @@
         </div>
       </div>
     </div>
-    <div v-show="!comments.length" class="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-md">
+    <div v-else class="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-md">
       <i class="far fa-comments text-5xl text-gray-300 dark:text-gray-600 mb-4 animate-bounce"></i>
       <p class="text-gray-500 dark:text-gray-400">Будьте первым, кто оставит комментарий!</p>
     </div>
@@ -51,8 +53,9 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useStore } from 'vuex';
+import { useToast } from 'vue-toastification';
 import ReplyComment from '../views/ReplyComment.vue';
 
 const props = defineProps({
@@ -62,42 +65,46 @@ const props = defineProps({
 });
 
 const store = useStore();
+const toast = useToast();
 const allComments = computed(() => store.getters['comments/getComments'] || []);
 const comments = computed(() => {
   const start = (props.currentPage - 1) * props.itemsPerPage;
   const end = start + props.itemsPerPage;
+  console.log('Computed comments:', { start, end, sliced: allComments.value.slice(start, end) });
   return allComments.value.slice(start, end);
 });
+const isLoading = computed(() => store.getters['comments/isLoading']);
 const currentUser = computed(() => store.state.auth.user);
 const activeReplyCommentId = ref(null);
 const isLiking = ref({});
 
 onMounted(async () => {
   await store.dispatch('comments/fetchComments', props.postId);
-  comments.value.forEach((comment) => {
+  // Загружаем ответы для всех комментариев, а не только для текущей страницы
+  allComments.value.forEach((comment) => {
     store.dispatch('reply/fetchReplies', { postId: props.postId, commentId: comment.id });
   });
 });
 
-watch(comments, (newComments) => {
-  newComments.forEach((comment) => {
-    if (!store.getters['reply/getReplies'](comment.id).length) {
-      store.dispatch('reply/fetchReplies', { postId: props.postId, commentId: comment.id });
-    }
+onUnmounted(() => {
+  store.dispatch('comments/unsubscribeComments', props.postId);
+  allComments.value.forEach((comment) => {
+    store.dispatch('reply/unsubscribeReplies', { commentId: comment.id });
   });
 });
 
 const toggleLike = async (commentId) => {
   if (!currentUser.value || !currentUser.value.uid) {
-    alert('Пожалуйста, войдите в систему, чтобы поставить лайк.');
+    toast.warning('Пожалуйста, войдите в систему, чтобы поставить лайк.');
     return;
   }
   isLiking.value[commentId] = true;
   try {
     await store.dispatch('comments/likeComment', { postId: props.postId, commentId });
+    toast.success('Лайк обновлен');
   } catch (error) {
     console.error('Ошибка при установке лайка:', error);
-    if (error.message === 'Пользователь не авторизован') alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+    toast.error(error.message === 'Пользователь не авторизован' ? 'Ваша сессия истекла. Пожалуйста, войдите снова.' : 'Не удалось обновить лайк');
   } finally {
     isLiking.value[commentId] = false;
   }

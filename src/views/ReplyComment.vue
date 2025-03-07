@@ -67,36 +67,51 @@ const currentUser = computed(() => {
 });
 
 const submitReply = async () => {
+  console.log('submitReply started');
   if (!currentUser.value.uid) {
+    console.log('No user logged in');
     toast.error('Пожалуйста, войдите в систему');
     return;
   }
   if (!replyContent.value.trim()) {
+    console.log('Empty reply content');
     toast.warning('Введите текст ответа');
     return;
   }
-  if (isSubmitting.value) return; // Защита от повторной отправки
+  if (isSubmitting.value) {
+    console.log('Already submitting');
+    return;
+  }
 
   isSubmitting.value = true;
   try {
-    const result = await store.dispatch('reply/addReply', {
+    console.log('Submitting reply with:', {
       postId: props.postId,
-      commentId: props.commentId,
+      commentId: String(props.commentId),
       content: replyContent.value.trim(),
     });
 
+    const result = await store.dispatch('reply/addReply', {
+      postId: props.postId,
+      commentId: String(props.commentId),
+      content: replyContent.value.trim(),
+    });
+
+    console.log('Dispatch result:', result);
     if (result.success) {
       replyContent.value = '';
       toast.success('Ответ успешно добавлен');
+      console.log('Reply added successfully for commentId:', props.commentId);
       emit('cancel');
     } else {
-      toast.error(result.error || 'Не удалось добавить ответ');
+      throw new Error(result.error || 'Не удалось добавить ответ');
     }
   } catch (error) {
     console.error('Ошибка при отправке ответа:', error);
-    toast.error('Произошла ошибка при отправке');
+    toast.error(error.message || 'Произошла ошибка при отправке');
   } finally {
     isSubmitting.value = false;
+    console.log('submitReply finished');
   }
 };
 

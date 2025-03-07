@@ -1,28 +1,32 @@
-import { ref as databaseRef, push, set, get, onValue, remove } from 'firebase/database';
+import { ref as databaseRef, push, set, get, onValue, update, off } from 'firebase/database';
 import { database } from '../../plugins/firebase';
 
 export default {
   namespaced: true,
   state() {
     return {
-      replies: {},
       comments: [],
       isLoading: false,
       error: null,
+      unsubscribe: null,
     };
   },
   mutations: {
-    SET_REPLIES(state, { commentId, replies }) {
-      state.replies[commentId] = replies;
-    },
-    ADD_REPLY(state, { commentId, reply }) {
-      if (!state.replies[commentId]) {
-        state.replies[commentId] = [];
-      }
-      state.replies[commentId].push(reply);
-    },
     SET_COMMENTS(state, comments) {
       state.comments = comments;
+    },
+    ADD_COMMENT(state, comment) {
+      if (!state.comments.some(c => c.id === comment.id)) {
+        state.comments.push(comment);
+      }
+    },
+    UPDATE_COMMENT(state, { commentId, updatedComment }) {
+      const index = state.comments.findIndex(c => c.id === commentId);
+      if (index !== -1) {
+        state.comments[index] = { ...state.comments[index], ...updatedComment };
+      } else {
+        console.warn(`Comment with ID ${commentId} not found in state for update`);
+      }
     },
     SET_LOADING(state, status) {
       state.isLoading = status;
@@ -30,127 +34,59 @@ export default {
     SET_ERROR(state, error) {
       state.error = error;
     },
-    UPDATE_COMMENT_LIKES(state, { commentId, liked, userId }) {
-      const comment = state.comments.find(c => c.id === commentId);
-      if (comment) {
-        if (!comment.likedBy) comment.likedBy = {};
-        if (liked) {
-          comment.likedBy[userId] = true;
-        } else {
-          delete comment.likedBy[userId];
-        }
-        comment.likes = Object.keys(comment.likedBy).length; // Всегда вычисляем likes из likedBy
-      }
+    SET_UNSUBSCRIBE(state, unsubscribe) {
+      state.unsubscribe = unsubscribe;
     },
   },
   actions: {
-    async fetchReplies({ commit }, { postId, commentId }) {
+    async fetchComments({ commit, state }, postId) {
+      if (state.unsubscribe) {
+        state.unsubscribe();
+      }
+
       commit('SET_LOADING', true);
-      try {
-        const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
-        onValue(repliesRef, (snapshot) => {
-          const replies = [];
-          if (snapshot.exists()) {
-            snapshot.forEach((childSnapshot) => {
-              replies.push({
-                id: childSnapshot.key,
-                ...childSnapshot.val(),
-              });
-            });
-          }
-          commit('SET_REPLIES', { commentId, replies });
-        });
-      } catch (error) {
-        console.error('Ошибка при загрузке ответов:', error);
-        commit('SET_ERROR', error.message);
-      } finally {
-        commit('SET_LOADING', false);
-      }
-    },
-
-    async addReply({ commit, rootState }, { postId, commentId, content }) {
-      try {
-        const currentUser = rootState.auth.user;
-        if (!currentUser) {
-          throw new Error('Пожалуйста, войдите в систему');
+      return new Promise((resolve, reject) => {
+        try {
+          const commentsRef = databaseRef(database, `posts/${postId}/comments`);
+          const unsubscribe = onValue(
+            commentsRef,
+            (snapshot) => {
+              const comments = [];
+              if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                  comments.push({
+                    id: childSnapshot.key,
+                    ...childSnapshot.val(),
+                  });
+                });
+              }
+              console.log('Fetched comments from Firebase:', comments);
+              commit('SET_COMMENTS', comments);
+              commit('SET_LOADING', false);
+              resolve(); // Разрешаем промис после первой загрузки
+            },
+            (error) => {
+              console.error('Ошибка в подписке на комментарии:', error);
+              commit('SET_ERROR', error.message);
+              commit('SET_LOADING', false);
+              reject(error);
+            }
+          );
+          commit('SET_UNSUBSCRIBE', unsubscribe);
+        } catch (error) {
+          console.error('Ошибка при загрузке комментариев:', error);
+          commit('SET_ERROR', error.message);
+          commit('SET_LOADING', false);
+          reject(error);
         }
-
-        const userProfileRef = databaseRef(database, `users/${currentUser.uid}/profile`);
-        const userProfileSnapshot = await get(userProfileRef);
-        const userProfile = userProfileSnapshot.val() || {};
-
-        const newReply = {
-          content,
-          author: {
-            uid: currentUser.uid,
-            username: userProfile.username || 'Guest',
-            avatarUrl: userProfile.avatarUrl || '/image/empty_avatar.png',
-            signature: userProfile.signature || 'New User',
-          },
-          createdAt: new Date().toISOString(),
-        };
-
-        const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
-        const newReplyRef = push(repliesRef);
-        await set(newReplyRef, newReply);
-
-        commit('ADD_REPLY', { commentId, reply: { id: newReplyRef.key, ...newReply } });
-        return { success: true };
-      } catch (error) {
-        console.error('Ошибка при добавлении ответа:', error);
-        commit('SET_ERROR', error.message);
-        return { success: false, error: error.message };
-      }
+      });
     },
 
-    async fetchComments({ commit }, postId) {
-      commit('SET_LOADING', true);
-      try {
-        const commentsRef = databaseRef(database, `posts/${postId}/comments`);
-        onValue(commentsRef, (snapshot) => {
-          const comments = [];
-          if (snapshot.exists()) {
-            snapshot.forEach((childSnapshot) => {
-              const commentData = childSnapshot.val();
-              comments.push({
-                id: childSnapshot.key,
-                ...commentData,
-                likes: commentData.likedBy ? Object.keys(commentData.likedBy).length : 0, // Вычисляем likes из likedBy
-              });
-            });
-          }
-          commit('SET_COMMENTS', comments);
-        });
-      } catch (error) {
-        console.error('Ошибка при загрузке комментариев:', error);
-        commit('SET_ERROR', error.message);
-      } finally {
-        commit('SET_LOADING', false);
-      }
-    },
-
-    async likeComment({ commit, rootState }, { postId, commentId }) {
-      const currentUser = rootState.auth.user;
-      if (!currentUser || !currentUser.uid) {
-        throw new Error('Пользователь не авторизован');
-      }
-
-      try {
-        const likeRef = databaseRef(database, `posts/${postId}/comments/${commentId}/likedBy/${currentUser.uid}`);
-        const snapshot = await get(likeRef);
-
-        if (snapshot.exists()) {
-          // Убираем лайк
-          await remove(likeRef);
-          commit('UPDATE_COMMENT_LIKES', { commentId, liked: false, userId: currentUser.uid });
-        } else {
-          // Добавляем лайк
-          await set(likeRef, true);
-          commit('UPDATE_COMMENT_LIKES', { commentId, liked: true, userId: currentUser.uid });
-        }
-      } catch (error) {
-        console.error('Ошибка при установке лайка:', error);
-        throw error;
+    unsubscribeComments({ state, commit }) {
+      if (state.unsubscribe) {
+        state.unsubscribe();
+        commit('SET_UNSUBSCRIBE', null);
+        console.log('Unsubscribed from comments listener');
       }
     },
 
@@ -169,23 +105,22 @@ export default {
           content,
           author: {
             uid: currentUser.uid,
-            username: userProfile.username || 'Guest',
+            username: userProfile.username || 'Гость',
             avatarUrl: userProfile.avatarUrl || '/image/empty_avatar.png',
-            signature: userProfile.signature || 'New User',
+            signature: userProfile.signature || 'Участник форума',
           },
           createdAt: new Date().toISOString(),
-          likedBy: {}, // Инициализируем без likes, только likedBy
+          likes: 0,
+          likedBy: {},
         };
 
         const commentsRef = databaseRef(database, `posts/${postId}/comments`);
         const newCommentRef = push(commentsRef);
         await set(newCommentRef, newComment);
 
-        commit('SET_COMMENTS', [
-          ...state.comments,
-          { id: newCommentRef.key, ...newComment, likes: 0 } // Добавляем likes как вычисляемое поле
-        ]);
-
+        const commentWithId = { id: newCommentRef.key, ...newComment };
+        commit('ADD_COMMENT', commentWithId);
+        console.log('Added comment:', commentWithId);
         return { success: true };
       } catch (error) {
         console.error('Ошибка при добавлении комментария:', error);
@@ -193,14 +128,50 @@ export default {
         throw error;
       }
     },
+
+    async likeComment({ commit, rootState }, { postId, commentId }) {
+      const user = rootState.auth.user;
+      if (!user) {
+        throw new Error('Пользователь не авторизован');
+      }
+
+      try {
+        const commentRef = databaseRef(database, `posts/${postId}/comments/${commentId}`);
+        const snapshot = await get(commentRef);
+        const comment = snapshot.val();
+
+        if (!comment) {
+          throw new Error('Комментарий не найден');
+        }
+
+        const likedBy = comment.likedBy || {};
+        const likes = comment.likes || 0;
+
+        if (likedBy[user.uid]) {
+          delete likedBy[user.uid];
+          await update(commentRef, {
+            likes: likes - 1,
+            [`likedBy/${user.uid}`]: null,
+          });
+        } else {
+          likedBy[user.uid] = true;
+          await update(commentRef, {
+            likes: likes + 1,
+            [`likedBy/${user.uid}`]: true,
+          });
+        }
+
+        const updatedComment = { ...comment, likedBy, likes: likedBy[user.uid] ? likes + 1 : likes - 1 };
+        commit('UPDATE_COMMENT', { commentId, updatedComment });
+        console.log('Updated comment locally:', updatedComment);
+      } catch (error) {
+        console.error('Ошибка при обновлении лайка:', error);
+        throw error;
+      }
+    },
   },
   getters: {
-    getReplies: (state) => (commentId) => {
-      return state.replies[commentId] || [];
-    },
-    getComments: (state) => {
-      return state.comments;
-    },
+    getComments: (state) => state.comments,
     isLoading: (state) => state.isLoading,
     hasError: (state) => state.error !== null,
     getError: (state) => state.error,

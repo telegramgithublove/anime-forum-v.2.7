@@ -1,13 +1,14 @@
-import { ref as databaseRef, push, set, get, onValue } from 'firebase/database';
+import { ref as databaseRef, push, set, get, onValue, off } from 'firebase/database';
 import { database } from '../../plugins/firebase';
 
 export default {
   namespaced: true,
   state() {
     return {
-      replies: {}, // Ответы хранятся в объекте, где ключ — commentId
+      replies: {},
       isLoading: false,
       error: null,
+      unsubscribers: {},
     };
   },
   mutations: {
@@ -18,7 +19,6 @@ export default {
       if (!state.replies[commentId]) {
         state.replies[commentId] = [];
       }
-      // Проверяем, чтобы избежать дублирования
       if (!state.replies[commentId].some(r => r.id === reply.id)) {
         state.replies[commentId].push(reply);
       }
@@ -29,27 +29,46 @@ export default {
     SET_ERROR(state, error) {
       state.error = error;
     },
+    SET_UNSUBSCRIBE(state, { commentId, unsubscribe }) {
+      state.unsubscribers[commentId] = unsubscribe;
+    },
+    CLEAR_UNSUBSCRIBE(state, commentId) {
+      delete state.unsubscribers[commentId];
+    },
   },
   actions: {
-    async fetchReplies({ commit }, { postId, commentId }) {
+    async fetchReplies({ commit, state }, { postId, commentId }) {
+      if (state.unsubscribers[commentId]) {
+        state.unsubscribers[commentId]();
+        commit('CLEAR_UNSUBSCRIBE', commentId);
+      }
+
       commit('SET_LOADING', true);
       try {
         const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
-        onValue(repliesRef, (snapshot) => {
-          const replies = [];
-          if (snapshot.exists()) {
-            snapshot.forEach((childSnapshot) => {
-              replies.push({
-                id: childSnapshot.key,
-                ...childSnapshot.val(),
+        const unsubscribe = onValue(
+          repliesRef,
+          (snapshot) => {
+            const replies = [];
+            if (snapshot.exists()) {
+              snapshot.forEach((childSnapshot) => {
+                replies.push({
+                  id: childSnapshot.key,
+                  ...childSnapshot.val(),
+                });
               });
-            });
+            }
+            console.log(`Fetched replies for comment ${commentId}:`, replies);
+            commit('SET_REPLIES', { commentId, replies });
+            commit('SET_LOADING', false);
+          },
+          (error) => {
+            console.error('Ошибка в подписке на ответы:', error);
+            commit('SET_ERROR', error.message);
+            commit('SET_LOADING', false);
           }
-          commit('SET_REPLIES', { commentId, replies });
-          commit('SET_LOADING', false);
-        }, {
-          onlyOnce: false, // Подписка на изменения в реальном времени
-        });
+        );
+        commit('SET_UNSUBSCRIBE', { commentId, unsubscribe });
       } catch (error) {
         console.error('Ошибка при загрузке ответов:', error);
         commit('SET_ERROR', error.message);
@@ -59,6 +78,7 @@ export default {
 
     async addReply({ commit, rootState }, { postId, commentId, content }) {
       try {
+        console.log('addReply started for commentId:', commentId);
         const currentUser = rootState.auth.user;
         if (!currentUser) {
           throw new Error('Пожалуйста, войдите в систему');
@@ -80,23 +100,32 @@ export default {
         };
 
         const repliesRef = databaseRef(database, `posts/${postId}/comments/${commentId}/replies`);
+        console.log('Attempting to save reply to:', repliesRef.toString());
         const newReplyRef = push(repliesRef);
         await set(newReplyRef, newReply);
+        console.log('Reply saved to Firebase with key:', newReplyRef.key);
 
-        // Локально добавляем только если ещё не добавлено (опционально можно убрать)
-        commit('ADD_REPLY', { commentId, reply: { id: newReplyRef.key, ...newReply } });
+        const replyWithId = { id: newReplyRef.key, ...newReply };
+        commit('ADD_REPLY', { commentId, reply: replyWithId });
+        console.log('Added reply:', replyWithId);
         return { success: true };
       } catch (error) {
         console.error('Ошибка при добавлении ответа:', error);
         commit('SET_ERROR', error.message);
-        return { success: false, error: error.message };
+        throw error;
+      }
+    },
+
+    unsubscribeReplies({ state, commit }, { commentId }) {
+      if (state.unsubscribers[commentId]) {
+        state.unsubscribers[commentId]();
+        commit('CLEAR_UNSUBSCRIBE', commentId);
+        console.log(`Unsubscribed from replies for comment ${commentId}`);
       }
     },
   },
   getters: {
-    getReplies: (state) => (commentId) => {
-      return state.replies[commentId] || [];
-    },
+    getReplies: (state) => (commentId) => state.replies[commentId] || [],
     isLoading: (state) => state.isLoading,
     hasError: (state) => state.error !== null,
     getError: (state) => state.error,
