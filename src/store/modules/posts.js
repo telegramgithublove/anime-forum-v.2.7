@@ -1,13 +1,12 @@
+// store/modules/posts.js
 import { 
   ref as dbRef,
   push,
   set,
   get,
   update,
-  remove,
   serverTimestamp
 } from 'firebase/database';
-import { database } from '../../plugins/firebase';
 import { getDatabase } from 'firebase/database';
 
 export default {
@@ -33,6 +32,7 @@ export default {
       state.currentPost = post;
     },
     UPDATE_POST(state, updatedPost) {
+      console.log('Мутация UPDATE_POST:', updatedPost);
       state.posts[updatedPost.id] = { ...state.posts[updatedPost.id], ...updatedPost };
     },
     SET_LOADING(state, loading) {
@@ -52,14 +52,10 @@ export default {
         const newPostRef = push(postsRef);
         const postId = newPostRef.key;
 
-        if (!postId) {
-          throw new Error('Не удалось сгенерировать ID для поста');
-        }
+        if (!postId) throw new Error('Не удалось сгенерировать ID для поста');
 
         const currentUser = rootState.auth.user;
-        if (!currentUser) {
-          throw new Error('Требуется авторизация для создания поста');
-        }
+        if (!currentUser) throw new Error('Требуется авторизация для создания поста');
 
         const fullPostData = {
           id: postId,
@@ -71,7 +67,7 @@ export default {
           videos: postData.videos || [],
           audio: postData.audio || [],
           documents: postData.documents || [],
-          tags: postData.tags || [],
+          tags: Array.isArray(postData.tags) ? postData.tags : [],
           likes: {},
           likesCount: 0,
           views: 0,
@@ -79,16 +75,114 @@ export default {
           updatedAt: serverTimestamp()
         };
 
-        await set(newPostRef, fullPostData);
-        const categoryPostRef = dbRef(db, `categories/${postData.categoryId}/posts/${postId}`);
-        await set(categoryPostRef, fullPostData);
+        await Promise.all([
+          set(newPostRef, fullPostData),
+          set(dbRef(db, `categories/${postData.categoryId}/posts/${postId}`), fullPostData)
+        ]);
 
         commit('SET_POST', fullPostData);
         commit('SET_CURRENT_POST', fullPostData);
-
         return postId;
       } catch (error) {
         console.error('Ошибка при создании поста:', error);
+        commit('SET_ERROR', error.message);
+        throw error;
+      } finally {
+        commit('SET_LOADING', false);
+      }
+    },
+
+    async toggleLike({ commit, rootState }, postId) {
+      const currentUser = rootState.auth.user;
+      if (!currentUser) throw new Error('Требуется авторизация');
+
+      commit('SET_LOADING', true);
+      try {
+        const db = getDatabase();
+        const categoriesRef = dbRef(db, 'categories');
+        const categoriesSnapshot = await get(categoriesRef);
+        
+        if (!categoriesSnapshot.exists()) throw new Error('Категории не найдены');
+
+        const categories = categoriesSnapshot.val();
+        let categoryId = null;
+        let post = null;
+
+        for (const catId in categories) {
+          if (categories[catId].posts && categories[catId].posts[postId]) {
+            categoryId = catId;
+            post = categories[catId].posts[postId];
+            break;
+          }
+        }
+
+        if (!post) throw new Error(`Пост ${postId} не найден`);
+
+        const postRef = dbRef(db, `categories/${categoryId}/posts/${postId}`);
+        const globalPostRef = dbRef(db, `posts/${postId}`);
+
+        const likes = post.likes || {};
+        let likesCount = post.likesCount || Object.keys(likes).length;
+
+        if (likes[currentUser.uid]) {
+          delete likes[currentUser.uid];
+          likesCount = Math.max(0, likesCount - 1);
+        } else {
+          likes[currentUser.uid] = true;
+          likesCount += 1;
+        }
+
+        const updatedPost = {
+          ...post,
+          id: postId,
+          categoryId,
+          likes,
+          likesCount
+        };
+
+        await Promise.all([
+          update(postRef, { likes, likesCount }),
+          update(globalPostRef, { likes, likesCount })
+        ]);
+
+        commit('UPDATE_POST', updatedPost);
+        return updatedPost;
+      } catch (error) {
+        console.error('[toggleLike] Ошибка:', error);
+        commit('SET_ERROR', error.message);
+        throw error;
+      } finally {
+        commit('SET_LOADING', false);
+      }
+    },
+
+    async fetchPostsByCategory({ commit }, categoryId) {
+      commit('SET_LOADING', true);
+      try {
+        const db = getDatabase();
+        const categoryPostsRef = dbRef(db, `categories/${categoryId}/posts`);
+        const categoryPostsSnapshot = await get(categoryPostsRef);
+
+        if (!categoryPostsSnapshot.exists()) {
+          commit('SET_POSTS', {});
+          return {};
+        }
+
+        const postsData = categoryPostsSnapshot.val();
+        const posts = {};
+
+        for (const postId in postsData) {
+          posts[postId] = {
+            id: postId,
+            ...postsData[postId],
+            tags: Array.isArray(postsData[postId].tags) ? postsData[postId].tags : (postsData[postId].tags ? [postsData[postId].tags] : ['форум'])
+          };
+        }
+
+        commit('SET_POSTS', posts);
+        return posts;
+      } catch (error) {
+        console.error('Ошибка при загрузке постов категории:', error);
         commit('SET_ERROR', error.message);
         throw error;
       } finally {
@@ -110,7 +204,8 @@ export default {
               const postData = {
                 id: postId,
                 categoryId,
-                ...categories[categoryId].posts[postId]
+                ...categories[categoryId].posts[postId],
+                tags: Array.isArray(categories[categoryId].posts[postId].tags) ? categories[categoryId].posts[postId].tags : (categories[categoryId].posts[postId].tags ? [categories[categoryId].posts[postId].tags] : ['форум'])
               };
               if (postData.authorId) {
                 const authorRef = dbRef(db, `users/${postData.authorId}/profile`);
@@ -128,90 +223,6 @@ export default {
         throw new Error('Пост не найден');
       } catch (error) {
         console.error('Ошибка при загрузке поста:', error);
-        commit('SET_ERROR', error.message);
-        throw error;
-      } finally {
-        commit('SET_LOADING', false);
-      }
-    },
-
-    async toggleLike({ commit, rootState }, postId) {
-      const currentUser = rootState.auth.user;
-      if (!currentUser) {
-        throw new Error('Требуется авторизация');
-      }
-
-      try {
-        const db = getDatabase();
-        const categoriesRef = dbRef(db, 'categories');
-        const categoriesSnapshot = await get(categoriesRef);
-        
-        if (categoriesSnapshot.exists()) {
-          const categories = categoriesSnapshot.val();
-          for (const categoryId in categories) {
-            if (categories[categoryId].posts && categories[categoryId].posts[postId]) {
-              const postRef = dbRef(db, `categories/${categoryId}/posts/${postId}`);
-              const postSnapshot = await get(postRef);
-              
-              if (postSnapshot.exists()) {
-                const post = postSnapshot.val();
-                const likes = post.likes || {};
-                let likesCount = Object.keys(likes).length;
-
-                if (likes[currentUser.uid]) {
-                  delete likes[currentUser.uid];
-                  likesCount--;
-                } else {
-                  likes[currentUser.uid] = true;
-                  likesCount++;
-                }
-
-                const updatedPost = {
-                  ...post,
-                  id: postId,
-                  categoryId,
-                  likes,
-                  likesCount
-                };
-
-                await update(postRef, { likes, likesCount });
-                commit('UPDATE_POST', updatedPost);
-                return updatedPost;
-              }
-            }
-          }
-        }
-        throw new Error('Пост не найден');
-      } catch (error) {
-        console.error('Ошибка при обновлении лайка:', error);
-        throw error;
-      }
-    },
-
-    async fetchPostsByCategory({ commit }, categoryId) {
-      commit('SET_LOADING', true);
-      try {
-        const categoryPostsRef = dbRef(database, `categories/${categoryId}/posts`);
-        const categoryPostsSnapshot = await get(categoryPostsRef);
-        
-        if (!categoryPostsSnapshot.exists()) {
-          commit('SET_POSTS', {});
-          return {};
-        }
-        
-        const postsData = categoryPostsSnapshot.val();
-        const posts = {};
-        for (const postId in postsData) {
-          posts[postId] = {
-            id: postId,
-            ...postsData[postId]
-          };
-        }
-        
-        commit('SET_POSTS', posts);
-        return posts;
-      } catch (error) {
-        console.error('Ошибка при загрузке постов категории:', error);
         commit('SET_ERROR', error.message);
         throw error;
       } finally {
