@@ -145,7 +145,21 @@
                   <span class="font-mono font-medium">{{ remainingChars }}</span>
                   <span class="font-medium">символов осталось</span>
                 </div>
-                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300" :disabled="!commentContent.trim()">
+                <div class="flex items-center space-x-3">
+                  <label class="relative cursor-pointer">
+                    <input type="file" accept="image/*" @change="handleImageUpload" class="hidden">
+                    <i class="fas fa-image text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                  </label>
+                  <label class="relative cursor-pointer">
+                    <input type="file" accept="audio/*" @change="handleAudioUpload" class="hidden">
+                    <i class="fas fa-music text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                  </label>
+                  <label class="relative cursor-pointer">
+                    <input type="file" accept="video/*" @change="handleVideoUpload" class="hidden">
+                    <i class="fas fa-video text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                  </label>
+                </div>
+                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300" :disabled="!commentContent.trim() && !hasAttachments">
                   <i class="fas fa-paper-plane"></i>
                   <span class="text-sm font-medium">Отправить</span>
                 </button>
@@ -159,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'vue-toastification';
@@ -184,6 +198,11 @@ const totalComments = computed(() => allComments.value.length);
 const MAX_CHARS = 333;
 const commentContent = ref('');
 const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
+const imageFile = ref(null);
+const audioFile = ref(null);
+const videoFile = ref(null);
+
+const hasAttachments = computed(() => imageFile.value || audioFile.value || videoFile.value);
 
 onMounted(async () => {
   try {
@@ -291,9 +310,24 @@ const handleKeyDown = (event) => {
   }
 };
 
+const handleImageUpload = (event) => {
+  imageFile.value = event.target.files[0];
+  toast.info(`Выбрана картинка: ${imageFile.value.name}`);
+};
+
+const handleAudioUpload = (event) => {
+  audioFile.value = event.target.files[0];
+  toast.info(`Выбрана музыка: ${audioFile.value.name}`);
+};
+
+const handleVideoUpload = (event) => {
+  videoFile.value = event.target.files[0];
+  toast.info(`Выбрано видео: ${videoFile.value.name}`);
+};
+
 const submitComment = async () => {
-  if (!commentContent.value.trim()) {
-    toast.warning('Пожалуйста, введите текст комментария');
+  if (!commentContent.value.trim() && !hasAttachments.value) {
+    toast.warning('Пожалуйста, введите текст комментария или прикрепите файл');
     return;
   }
   const user = store.state.auth.user;
@@ -302,8 +336,33 @@ const submitComment = async () => {
     return;
   }
   try {
-    await store.dispatch('comments/addComment', { postId: postId.value, content: commentContent.value.trim() });
+    const commentData = {
+      postId: postId.value,
+      content: commentContent.value.trim() || '',
+    };
+
+    // Здесь можно добавить логику загрузки файлов в Firebase Storage и получения URL
+    // Пример псевдокода:
+    /*
+    if (imageFile.value) {
+      const imageUrl = await uploadToStorage(imageFile.value, `comments/images/${user.uid}/${Date.now()}`);
+      commentData.image = imageUrl;
+    }
+    if (audioFile.value) {
+      const audioUrl = await uploadToStorage(audioFile.value, `comments/audio/${user.uid}/${Date.now()}`);
+      commentData.audio = audioUrl;
+    }
+    if (videoFile.value) {
+      const videoUrl = await uploadToStorage(videoFile.value, `comments/video/${user.uid}/${Date.now()}`);
+      commentData.video = videoUrl;
+    }
+    */
+
+    await store.dispatch('comments/addComment', commentData);
     commentContent.value = '';
+    imageFile.value = null;
+    audioFile.value = null;
+    videoFile.value = null;
     store.dispatch('pagination/setTotalItems', allComments.value.length);
     toast.success('Комментарий успешно добавлен!');
   } catch (error) {
@@ -346,7 +405,12 @@ const formatFileSize = (size) => {
 
 const getImageUrl = (image) => image || '';
 
-onBeforeUnmount(() => { commentContent.value = ''; });
+onBeforeUnmount(() => {
+  commentContent.value = '';
+  imageFile.value = null;
+  audioFile.value = null;
+  videoFile.value = null;
+});
 </script>
 
 <style scoped>
