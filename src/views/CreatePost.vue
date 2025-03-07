@@ -16,7 +16,8 @@
           </h2>
         </div>
         <div class="text-gray-500 dark:text-gray-400 text-sm">
-          {{ remainingCharacters }} символов осталось
+          {{ remainingTitleCharacters }} символов осталось
+        
         </div>
       </div>
 

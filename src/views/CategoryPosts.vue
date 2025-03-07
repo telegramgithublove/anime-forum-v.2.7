@@ -3,12 +3,10 @@
     <div class="max-w-7xl mx-auto">
       <!-- Навигационные кнопки -->
       <div class="mb-8 flex justify-between items-center animate-slide-in-right">
-
-
-
+        <!-- Можно добавить дополнительные кнопки, если нужно -->
       </div>
   
-        <!-- Заголовок категории с анимацией -->
+      <!-- Заголовок категории с анимацией -->
       <div class="text-center mb-12 animate-fade-in">
         <h1 class="text-6xl sm:text-7xl md:text-8xl font-black tracking-tight bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 dark:from-purple-400 dark:via-pink-400 dark:to-blue-400 bg-clip-text text-transparent mb-4 transform hover:scale-105 transition-transform duration-300">
           {{ categoryName.toUpperCase() }}
@@ -37,17 +35,17 @@
 
       <!-- Список постов -->
       <div v-if="posts.length > 0 && !isLoading" class="space-y-6">
-        <router-link v-for="post in sortedPosts" 
-                    :key="post.id"
-                    :to="{ name: 'post-details', params: { id: post.id }}"
-                    class="block group ">
+        <div v-for="post in sortedPosts" 
+             :key="post.id"
+             class="group">
           <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 overflow-hidden">
-            <div class="p-8">
+            <router-link :to="{ name: 'post-details', params: { id: post.id }}"
+                         class="block p-8">
               <div class="flex items-start space-x-6">
                 <!-- Аватар и информация об авторе -->
-                <div class="flex-shrink-0 group">
+                <div class="flex-shrink-0">
                   <div class="relative">
-                    <div class="w-20 ml-5  h-20 rounded-full overflow-hidden ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300">
+                    <div class="w-20 ml-5 h-20 rounded-full overflow-hidden ring-4 ring-purple-500/30 group-hover:ring-purple-500/50 transition-all duration-300">
                       <img :src="post.authorAvatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.authorName) + '&background=random'"
                            :alt="post.authorName"
                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-300"
@@ -90,34 +88,38 @@
                       #{{ tag }}
                     </span>
                   </div>
+                </div>
+              </div>
+            </router-link>
 
-                  <!-- Метаданные -->
-                  <div class="mt-6 flex items-center justify-between text-lg">
-                    <div class="flex items-center space-x-8">
-                      <!-- Лайки -->
-                      <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 group/likes">
-                        <i class="fas fa-heart text-xl group-hover/likes:text-red-500 transform group-hover/likes:scale-125 transition-all duration-300"></i>
-                        <span>{{ post.likes || 0 }}</span>
-                      </div>
-                      <!-- Комментарии -->
-                      <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 group/comments">
-                        <i class="fas fa-comment text-xl group-hover/comments:text-blue-500 transform group-hover/comments:scale-125 transition-all duration-300"></i>
-                        <span>{{ post.comments?.length || 0 }}</span>
-                      </div>
-                      <!-- Просмотры -->
-                      <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
-                        <i class="fas fa-eye text-xl"></i>
-                        <span>{{ post.views || 0 }}</span>
-                      </div>
-                    </div>
-                    <!-- Индикатор перехода -->
-                    <i class="fas fa-arrow-right text-2xl text-purple-500 opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-2 transition-all duration-300"></i>
+            <!-- Метаданные (вне router-link) -->
+            <div class="p-8 pt-0">
+              <div class="flex items-center justify-between text-lg">
+                <div class="flex items-center space-x-8">
+                  <!-- Лайки -->
+                  <button @click="toggleLike(post.id)" 
+                          class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 group/likes">
+                    <i class="fas fa-heart text-xl" 
+                       :class="{ 'text-red-500': isLiked(post), 'group-hover/likes:text-red-500': !isLiked(post) }"></i>
+                    <span>{{ post.likesCount || Object.keys(post.likes || {}).length }}</span>
+                  </button>
+                  <!-- Комментарии -->
+                  <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 group/comments">
+                    <i class="fas fa-comment text-xl group-hover/comments:text-blue-500 transform group-hover/comments:scale-125 transition-all duration-300"></i>
+                    <span>{{ post.comments?.length || 0 }}</span>
+                  </div>
+                  <!-- Просмотры -->
+                  <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-eye text-xl"></i>
+                    <span>{{ post.views || 0 }}</span>
                   </div>
                 </div>
+                <!-- Индикатор перехода -->
+                <i class="fas fa-arrow-right text-2xl text-purple-500 opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-2 transition-all duration-300"></i>
               </div>
             </div>
           </div>
-        </router-link>
+        </div>
       </div>
 
       <!-- Сообщение об отсутствии постов -->
@@ -142,14 +144,13 @@
       </div>
     </div>
   </div>
-
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { getDatabase, ref as dbRef, get, onValue } from 'firebase/database';
 import { useStore } from 'vuex';
+import { getDatabase, ref as dbRef, get, onValue } from 'firebase/database'; // Убрали off
 
 const route = useRoute();
 const store = useStore();
@@ -159,15 +160,14 @@ const categoryName = ref('');
 const categoryDescription = ref('');
 const isLoading = ref(true);
 const loadingProgress = ref(0);
+let unsubscribe = null;
 
-// Получение данных категории и постов
 onMounted(async () => {
   try {
     isLoading.value = true;
     loadingProgress.value = 0;
     const db = getDatabase();
     
-    // Получаем информацию о категории
     const categoryRef = dbRef(db, `categories/${categoryId}`);
     loadingProgress.value = 20;
     const categorySnapshot = await get(categoryRef);
@@ -178,63 +178,48 @@ onMounted(async () => {
       categoryDescription.value = categoryData.description;
       loadingProgress.value = 40;
       
-      // Подписываемся на обновления постов в реальном времени
       const postsRef = dbRef(db, `categories/${categoryId}/posts`);
-      onValue(postsRef, async (snapshot) => {
+      unsubscribe = onValue(postsRef, async (snapshot) => {
         try {
+          loadingProgress.value = 60;
           if (snapshot.exists()) {
             const postsData = snapshot.val();
-            loadingProgress.value = 60;
+            const postsArray = await Promise.all(Object.entries(postsData).map(async ([id, post], index, array) => {
+              const progressPerPost = 30 / array.length;
+              loadingProgress.value = 60 + progressPerPost * (index + 1);
+              
+              await store.dispatch('profile/fetchProfile', post.authorId);
+              const authorProfile = store.getters['profile/getProfile'];
+              
+              return {
+                id,
+                ...post,
+                authorName: authorProfile?.username || post.authorName || 'Анонимный пользователь',
+                authorAvatar: authorProfile?.avatarUrl || '/image/empty_avatar.png',
+                authorSignature: authorProfile?.signature || 'Участник форума',
+                authorOnline: false,
+                likes: post.likes || {},
+                likesCount: post.likesCount || Object.keys(post.likes || {}).length,
+                comments: post.comments || [],
+                views: post.views || 0,
+                tags: post.tags || ['форум', 'обсуждение'],
+                createdAt: post.createdAt || 0
+              };
+            }));
             
-            // Преобразуем посты в массив с получением данных пользователей
-            const postsPromises = Object.entries(postsData).map(async ([id, post], index, array) => {
-              try {
-                // Обновляем прогресс для каждого поста
-                const progressPerPost = 30 / array.length;
-                loadingProgress.value = 60 + progressPerPost * (index + 1);
-                
-                // Получаем профиль пользователя через Vuex
-                await store.dispatch('profile/fetchProfile', post.authorId);
-                const authorProfile = store.getters['profile/getProfile'];
-                
-                return {
-                  id,
-                  ...post,
-                  authorName: authorProfile?.username || post.authorName || 'Анонимный пользователь',
-                  authorAvatar: authorProfile?.avatarUrl || '/image/empty_avatar.png',
-                  authorSignature: authorProfile?.signature || 'Участник форума',
-                  authorOnline: false,
-                  likes: post.likes || 0,
-                  comments: post.comments || [],
-                  views: post.views || 0,
-                  tags: post.tags || ['форум', 'обсуждение']
-                };
-              } catch (error) {
-                console.error(`Ошибка при получении профиля пользователя ${post.authorId}:`, error);
-                return {
-                  id,
-                  ...post,
-                  authorName: post.authorName || 'Анонимный пользователь',
-                  authorAvatar: '/image/empty_avatar.png',
-                  authorSignature: 'Участник форума',
-                  authorOnline: false,
-                  likes: post.likes || 0,
-                  comments: post.comments || [],
-                  views: post.views || 0,
-                  tags: post.tags || ['форум', 'обсуждение']
-                };
-              }
-            });
-            
-            posts.value = await Promise.all(postsPromises);
+            posts.value = postsArray;
             loadingProgress.value = 100;
+          } else {
+            posts.value = [];
           }
         } finally {
           setTimeout(() => {
             isLoading.value = false;
             loadingProgress.value = 0;
-          }, 500); // Небольшая задержка для плавности
+          }, 500);
         }
+      }, (error) => {
+        console.error('Ошибка подписки на посты:', error);
       });
     }
   } catch (error) {
@@ -244,42 +229,55 @@ onMounted(async () => {
   }
 });
 
-// Сортировка постов по дате создания (новые сверху)
-const sortedPosts = computed(() => {
-  return [...posts.value].sort((a, b) => b.createdAt - a.createdAt);
+onUnmounted(() => {
+  if (unsubscribe) {
+    unsubscribe(); // Вызываем функцию отписки напрямую
+    unsubscribe = null;
+  }
 });
 
-// Форматирование даты
+const sortedPosts = computed(() => {
+  return [...posts.value].sort((a, b) => {
+    const aTime = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt;
+    const bTime = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt;
+    return bTime - aTime;
+  });
+});
+
 const formatDate = (timestamp) => {
   if (!timestamp) return '';
   const date = new Date(timestamp);
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
+  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
 };
 
-// Форматирование времени
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
   const date = new Date(timestamp);
-  return date.toLocaleTimeString('ru-RU', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 };
 
-// Обработчик ошибки загрузки аватара
 const handleAvatarError = (event) => {
-  // Если основное изображение не загрузилось, используем сгенерированный аватар
   const img = event.target;
   const userName = img.alt || 'User';
   img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random`;
 };
+
+const toggleLike = async (postId) => {
+  try {
+    await store.dispatch('posts/toggleLike', postId);
+  } catch (error) {
+    console.error('Ошибка при переключении лайка:', error);
+  }
+};
+
+const isLiked = (post) => {
+  const user = store.state.auth.user;
+  return user && post.likes && post.likes[user.uid];
+};
 </script>
 
 <style scoped>
+/* Стили остаются без изменений */
 .animate-fade-in {
   animation: fadeIn 0.6s ease-out;
 }
@@ -297,37 +295,16 @@ const handleAvatarError = (event) => {
   animation: spin 1s linear infinite;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.6s ease-out;
-}
-
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-slide-in-right {
-  animation: slideInRight 0.6s ease-out;
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-/* Стилизация скроллбара */
 ::-webkit-scrollbar {
   width: 8px;
 }

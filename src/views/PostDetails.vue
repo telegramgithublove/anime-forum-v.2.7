@@ -260,7 +260,7 @@ const isFavorite = computed(() => {
   return Boolean(post.value.favorites[user.uid]);
 });
 
-const goBack = () => router.back();
+const goBack = () => router.replace('/');
 
 const handleLike = async () => {
   const user = store.state.auth.user;
