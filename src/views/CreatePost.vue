@@ -322,7 +322,7 @@
               v-model="tagInput"
               @keydown.enter.prevent="addTag"
               class="w-96 px-3 py-1 border border-gray-300 rounded focus:border-gray-400 focus:outline-none dark:bg-gray-700 dark:text-white transition"
-              :placeholder="store.getters['tegs/canAddMoreTags'] ? 'Теги...' : 'Достигнут лимит тегов'"
+              :placeholder="store.getters['tegs/canAddMoreTags'] ? 'Теги через Enter' : 'Достигнут лимит тегов'"
               :disabled="!store.getters['tegs/canAddMoreTags']"
             />
             <div class="flex flex-wrap gap-2 mt-2">

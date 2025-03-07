@@ -21,12 +21,16 @@
           <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 overflow-hidden">
             <router-link :to="{ name: 'post-details', params: { id: post.id }}" class="block p-8">
               <div class="flex items-start space-x-6">
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0 text-center">
                   <img 
                     :src="post.authorAvatar" 
                     :alt="`${post.authorName}'s avatar`" 
-                    class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-purple-200 dark:border-purple-700 group-hover:border-purple-400 dark:group-hover:border-purple-500 transition-colors duration-300"
+                    class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-purple-200 dark:border-purple-700 group-hover:border-purple-400 dark:group-hover:border-purple-500 transition-colors duration-300 mx-auto"
+                    @error="handleAvatarError($event)"
                   >
+                  <span class="block mt-2 text-sm text-gray-600 dark:text-gray-300 font-medium">
+                    {{ post.authorName }}
+                  </span>
                 </div>
                 <div class="flex-1">
                   <div class="flex items-start justify-between">
@@ -97,6 +101,7 @@ import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 import { getDatabase, ref as dbRef, get, onValue } from 'firebase/database';
+import axios from 'axios'; // Импорт axios для profile.js
 
 const route = useRoute();
 const store = useStore();
@@ -105,8 +110,9 @@ const posts = ref([]);
 const categoryName = ref('');
 const categoryDescription = ref('');
 const isLoading = ref(true);
-const isLoadingLikes = ref(false); // Для блокировки кнопки лайка во время запроса
+const isLoadingLikes = ref(false);
 const loadingProgress = ref(0);
+const profileCache = ref({}); // Кэш для профилей
 let unsubscribe = null;
 
 onMounted(async () => {
@@ -133,24 +139,55 @@ onMounted(async () => {
         loadingProgress.value = 80;
         if (snapshot.exists()) {
           const postsData = snapshot.val();
+          const currentUserId = store.state.auth.user?.uid || localStorage.getItem('userId');
+          console.log('[CategoryPosts] Current user ID:', currentUserId);
+          console.log('[CategoryPosts] Auth username:', store.getters['auth/getUsername']);
+
           const postsArray = await Promise.all(Object.entries(postsData).map(async ([id, post]) => {
-            // Загружаем профиль автора
-            await store.dispatch('profile/fetchProfile', post.authorId);
-            const authorProfile = store.getters['profile/getProfile'];
-            
-            // Проверяем аватар: если есть в профиле — берём его, иначе — заглушка
-            const authorAvatar = authorProfile?.avatarUrl || '/image/empty_avatar.png';
-            
-            // Проверяем, лайкнул ли текущий пользователь пост
-            const currentUserId = store.state.auth.user?.uid;
-            const isLiked = post.likes && post.likes[currentUserId] || false;
+            console.log('[CategoryPosts] Post:', { id, authorId: post.authorId });
+            let authorName;
+            let authorAvatar;
+            let authorSignature;
+            let authorProfile = null;
+
+            if (!post.authorId) {
+              console.warn('[CategoryPosts] No authorId for post:', id);
+              authorName = post.authorName || 'Неизвестный';
+              authorAvatar = '/image/empty_avatar.png';
+              authorSignature = 'Участник форума';
+            } else if (post.authorId === currentUserId) {
+              authorName = store.getters['auth/getUsername'];
+              authorAvatar = store.getters['auth/getUserAvatar'];
+              authorSignature = store.getters['auth/getUserSignature'];
+              console.log('[CategoryPosts] Current user post - Name:', authorName, 'Avatar:', authorAvatar);
+            } else {
+              try {
+                if (!profileCache.value[post.authorId]) {
+                  await store.dispatch('profile/fetchProfile', post.authorId);
+                  profileCache.value[post.authorId] = store.getters['profile/getProfile'];
+                }
+                authorProfile = profileCache.value[post.authorId];
+                console.log('[CategoryPosts] Profile from cache for authorId:', post.authorId, authorProfile);
+                authorName = authorProfile?.username || post.authorName || 'Гость';
+                authorAvatar = store.getters['profile/getAvatarUrl'] || '/image/empty_avatar.png';
+                authorSignature = authorProfile?.signature || 'Участник форума';
+                console.log('[CategoryPosts] Other user - Name:', authorName, 'Avatar:', authorAvatar, 'Signature:', authorSignature);
+              } catch (error) {
+                console.error('[CategoryPosts] Failed to fetch profile for authorId:', post.authorId, error);
+                authorName = post.authorName || 'Гость';
+                authorAvatar = '/image/empty_avatar.png';
+                authorSignature = 'Участник форума';
+              }
+            }
+
+            const isLiked = post.likes && currentUserId && post.likes[currentUserId] || false;
 
             return {
               id,
               ...post,
-              authorName: authorProfile?.username || post.authorName || 'Анонимный пользователь',
+              authorName,
               authorAvatar,
-              authorSignature: authorProfile?.signature || 'Участник форума',
+              authorSignature,
               tags: Array.isArray(post.tags) ? post.tags : (post.tags ? [post.tags] : ['форум']),
               likes: post.likes || {},
               likesCount: post.likesCount || Object.keys(post.likes || {}).length,
@@ -161,7 +198,7 @@ onMounted(async () => {
             };
           }));
           posts.value = postsArray;
-          console.log('[CategoryPosts] Posts:', posts.value.slice());
+          console.log('[CategoryPosts] Posts updated:', posts.value);
           loadingProgress.value = 100;
         } else {
           posts.value = [];
@@ -203,7 +240,7 @@ const toggleLike = async (postId) => {
     const updatedPost = await store.dispatch('posts/toggleLike', postId);
     const postIndex = posts.value.findIndex(p => p.id === postId);
     if (postIndex !== -1) {
-      const currentUserId = store.state.auth.user?.uid;
+      const currentUserId = store.state.auth.user?.uid || localStorage.getItem('userId');
       const isLiked = updatedPost.likes && updatedPost.likes[currentUserId] || false;
       posts.value[postIndex] = {
         ...posts.value[postIndex],
@@ -218,6 +255,11 @@ const toggleLike = async (postId) => {
   } finally {
     isLoadingLikes.value = false;
   }
+};
+
+// Обработчик ошибки загрузки аватарки
+const handleAvatarError = (event) => {
+  event.target.src = '/image/empty_avatar.png'; // Подставляем пустышку при ошибке
 };
 </script>
 
