@@ -132,7 +132,6 @@
           <div class="flex items-start space-x-4">
             <img :src="currentUser.avatarUrl || '/image/empty_avatar.png'" :alt="currentUser.username || 'Гость'" @error="handleAvatarError" class="w-12 h-12 rounded-full object-cover border-2 border-purple-500">
             <div class="flex-1 space-y-3">
-              <div class="text-base font-semibold text-gray-900 dark:text-white">{{ currentUser.username || 'Гость' }}</div>
               <textarea
                 v-model="commentContent"
                 placeholder="Напишите ваш комментарий..."
@@ -140,30 +139,25 @@
                 @input="handleCommentInput"
                 @keydown="handleKeyDown"
               ></textarea>
-              <div class="flex items-center justify-between">
-                <div class="inline-flex items-center space-x-1.5 text-sm px-3 py-1 bg-gray-50 dark:bg-gray-700 rounded-full" :class="{ 'text-red-600': remainingChars <= 0, 'text-yellow-600': remainingChars <= 50 && remainingChars > 0, 'text-gray-600': remainingChars > 50 }">
-                  <span class="font-mono font-medium">{{ remainingChars }}</span>
-                  <span class="font-medium">символов осталось</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                  <label class="relative cursor-pointer">
-                    <input type="file" accept="image/*" @change="handleImageUpload" class="hidden">
-                    <i class="fas fa-image text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
-                  </label>
-                  <label class="relative cursor-pointer">
-                    <input type="file" accept="audio/*" @change="handleAudioUpload" class="hidden">
-                    <i class="fas fa-music text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
-                  </label>
-                  <label class="relative cursor-pointer">
-                    <input type="file" accept="video/*" @change="handleVideoUpload" class="hidden">
-                    <i class="fas fa-video text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
-                  </label>
-                </div>
-                <button @click="submitComment" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transform hover:scale-105 transition-all duration-300" :disabled="!commentContent.trim() && !hasAttachments">
-                  <i class="fas fa-paper-plane"></i>
-                  <span class="text-sm font-medium">Отправить</span>
-                </button>
+              <!-- Предпросмотр изображения -->
+              <div v-if="imagePreview" class="mt-4">
+                <img :src="imagePreview" alt="Предпросмотр изображения" class="max-w-full h-auto rounded-lg shadow-md" />
               </div>
+              <div class="flex space-x-1">
+                <label class="relative cursor-pointer">
+                  <input type="file" accept="image/*" @change="handleImageUpload" class="hidden">
+                  <i class="fas fa-image text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                </label>
+                <label class="relative cursor-pointer">
+                  <input type="file" accept="audio/*" @change="handleAudioUpload" class="hidden">
+                  <i class="fas fa-music text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                </label>
+                <label class="relative cursor-pointer">
+                  <input type="file" accept="video/*" @change="handleVideoUpload" class="hidden">
+                  <i class="fas fa-video text-lg text-purple-600 hover:text-purple-700 transition-all duration-300"></i>
+                </label>
+              </div>
+              
             </div>
           </div>
         </div>
@@ -195,10 +189,13 @@ const itemsPerPage = ref(10);
 const allComments = computed(() => store.getters['comments/getComments'] || []);
 const totalComments = computed(() => allComments.value.length);
 
-const MAX_CHARS = 333;
 const commentContent = ref('');
-const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
 const imageFile = ref(null);
+const imagePreview = ref(null);
+
+const MAX_CHARS = 333;
+const remainingChars = computed(() => MAX_CHARS - (commentContent.value?.length || 0));
+
 const audioFile = ref(null);
 const videoFile = ref(null);
 
@@ -312,7 +309,9 @@ const handleKeyDown = (event) => {
 
 const handleImageUpload = (event) => {
   imageFile.value = event.target.files[0];
-  toast.info(`Выбрана картинка: ${imageFile.value.name}`);
+  if (imageFile.value) {
+    imagePreview.value = URL.createObjectURL(imageFile.value);
+  }
 };
 
 const handleAudioUpload = (event) => {

@@ -90,7 +90,7 @@ export default {
       }
     },
 
-    async addComment({ commit, rootState }, { postId, content }) {
+    async addComment({ commit, rootState }, { postId, content, image }) {
       try {
         const currentUser = rootState.auth.user;
         if (!currentUser) {
@@ -103,6 +103,7 @@ export default {
 
         const newComment = {
           content,
+          image, // Добавлено поле image
           author: {
             uid: currentUser.uid,
             username: userProfile.username || 'Гость',
